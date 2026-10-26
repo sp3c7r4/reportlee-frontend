@@ -6,6 +6,7 @@ import {
   type ReportViewer,
   SAMPLE_NOW,
   SAMPLE_PERIOD,
+  SAMPLE_REPORTS,
 } from "../src/data/reports.ts";
 import {
   canDelete,
@@ -16,6 +17,7 @@ import {
   timeLeft,
   timelineFor,
   visibleReports,
+  seenOnOpen,
 } from "../src/lib/report-view.ts";
 
 /* @info - The state table is the screen. Every expectation below is written from the
@@ -252,4 +254,58 @@ test("Starter hides Reports older than thirty days", () => {
     visibleReports([fresh, stale], "team", SAMPLE_NOW).map((r) => r.id),
     ["fresh", "stale"],
   );
+});
+
+const reviewer: ReportViewer = {
+  membershipId: "mem_admin",
+  role: "admin",
+  space: null,
+};
+
+/* @info - Opening a Report is the moment the clocks start. A queue row is not an open,
+   and an author reading their own work never starts them. */
+
+test("a reviewer opening an unseen Report writes both clocks", () => {
+  const report = {
+    ...SAMPLE_REPORTS[0],
+    firstSeenAt: null,
+    windowStartedAt: null,
+  };
+  const write = seenOnOpen(report, reviewer, "2026-10-26T16:00:00.000Z");
+  assert.equal(write?.firstSeenAt, "2026-10-26T16:00:00.000Z");
+  assert.equal(write?.windowStartedAt, "2026-10-26T16:00:00.000Z");
+});
+
+test("a second look keeps the first seen clock but restarts nothing", () => {
+  const report = {
+    ...SAMPLE_REPORTS[0],
+    firstSeenAt: "2026-10-20T09:00:00.000Z",
+    windowStartedAt: "2026-10-20T09:00:00.000Z",
+  };
+  assert.equal(seenOnOpen(report, reviewer, "2026-10-26T16:00:00.000Z"), null);
+});
+
+test("an author reading their own Report writes nothing", () => {
+  const report = {
+    ...SAMPLE_REPORTS[0],
+    firstSeenAt: null,
+    windowStartedAt: null,
+  };
+  const author = {
+    membershipId: report.authorMembershipId,
+    role: "staff" as const,
+    space: "Platform",
+  };
+  assert.equal(seenOnOpen(report, author, "2026-10-26T16:00:00.000Z"), null);
+});
+
+test("a reopened Report starts a fresh window without losing first seen", () => {
+  const report = {
+    ...SAMPLE_REPORTS[0],
+    firstSeenAt: "2026-10-20T09:00:00.000Z",
+    windowStartedAt: null,
+  };
+  const write = seenOnOpen(report, reviewer, "2026-10-26T16:00:00.000Z");
+  assert.equal(write?.firstSeenAt, "2026-10-20T09:00:00.000Z");
+  assert.equal(write?.windowStartedAt, "2026-10-26T16:00:00.000Z");
 });

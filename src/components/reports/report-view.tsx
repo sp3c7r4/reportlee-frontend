@@ -25,6 +25,7 @@ import {
   latestReason,
   lockAt,
   primaryAction,
+  seenOnOpen,
   timeLeft,
   timelineFor,
   visibleReports,
@@ -107,6 +108,30 @@ export function ReportView({ reportId }: { reportId: string }) {
       hidden,
     );
     if (result.success) {
+      // Opening the page is the open: the clocks start here, never on a queue row.
+      const clocks = seenOnOpen(result.data, viewer, new Date().toISOString());
+      if (clocks) {
+        const seen = {
+          ...result.data,
+          ...clocks,
+          events: [
+            ...result.data.events,
+            {
+              kind: "seen" as const,
+              at: clocks.windowStartedAt,
+              actorMembershipId: membership.id,
+            },
+          ],
+        };
+        const saved = savedReports(window.localStorage, membership.id);
+        window.localStorage.setItem(
+          `${SAVED_PREFIX}.${membership.id}`,
+          JSON.stringify({ ...saved, [seen.id]: seen }),
+        );
+        setReport(seen);
+        setState("ready");
+        return;
+      }
       setReport(result.data);
       setState("ready");
       return;

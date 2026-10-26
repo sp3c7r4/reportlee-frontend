@@ -145,6 +145,9 @@ export function ReviewQueue() {
     const next: Report = {
       ...report,
       reviewStatus: decision === "approve" ? "approved" : "pending",
+      // Reopen gives the author a fresh window: the next look starts a new one, and
+      // firstSeenAt is never lost.
+      windowStartedAt: decision === "reopen" ? null : report.windowStartedAt,
       comments: comment ? [...report.comments, comment] : report.comments,
       events: [
         ...report.events,

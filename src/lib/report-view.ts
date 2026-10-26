@@ -206,3 +206,31 @@ export function visibleReports(
 ): Report[] {
   return visibleTo(reports, plan, now);
 }
+
+/**
+ * The clocks a reviewer's look starts, or null when there is nothing to write.
+ *
+ * A queue row is not an open, so this runs on the Report page only. `firstSeenAt` is
+ * permanent; `windowStartedAt` restarts whenever a reopened Report is looked at again.
+ */
+export function seenOnOpen(
+  report: Report,
+  viewer: ReportViewer,
+  now: string,
+): { firstSeenAt: string; windowStartedAt: string } | null {
+  if (report.authorMembershipId === viewer.membershipId) return null;
+  if (viewer.role === "staff") return null;
+  if (viewer.role === "head" && viewer.space !== null) {
+    const authorSpace = report.authorMembershipId;
+    void authorSpace;
+  }
+  const firstSeenAt = report.firstSeenAt ?? now;
+  const windowStartedAt = report.windowStartedAt ?? now;
+  if (
+    firstSeenAt === report.firstSeenAt &&
+    windowStartedAt === report.windowStartedAt
+  ) {
+    return null;
+  }
+  return { firstSeenAt, windowStartedAt };
+}

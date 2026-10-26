@@ -57,3 +57,33 @@
 - [ ] 7.4 Notification categories, tags send nothing, "new Report" routed through the queue scope function.
 - [ ] 7.5 Neutral bell badge in place of the red one shipped earlier.
 - [ ] 7.6 Home lists recent decisions for Staff.
+
+## Validation, step 1 (Home)
+
+Run on 2026-10-26 from `reportlee-frontend-new`.
+
+| Step | Command | Result |
+|---|---|---|
+| Types | `npx tsc --noEmit` | clean |
+| Tests | `npm test` | 149 pass, 0 fail (was 135) |
+| Red first | `scripts/home.test.ts` before `src/lib/home.ts` | `ERR_MODULE_NOT_FOUND`, then 10 expectations green |
+| Build | `npm run build` | compiled in 3.6s, 22/22 pages |
+| Detector | `impeccable detect` on the Home screen | `[]` |
+
+Browser, dark, 1440:
+
+- Admin in Kano: "Good evening, Amara", period and deadline, then Reports waiting for a decision (4) and People who have not submitted (4, naming them). No author cards, because an Admin authors nothing.
+- Staff in Arthurite: Tasks assigned to you (2, naming them) and Recent decisions reading Changes requested and Approved.
+
+## Decision clocks, 2026-10-26
+
+The gap recorded in `review-queue` is closed. `seenOnOpen(report, viewer, now)` in `src/lib/report-view.ts` is the
+only thing that decides the two clocks: a reviewer opening the Report page sets `firstSeenAt` once and
+`windowStartedAt` on first look at the current version, an author reading their own Report writes nothing, and a
+Reopen clears `windowStartedAt` so the next look starts a fresh window while `firstSeenAt` survives. Four
+expectations in `scripts/report-view.test.ts` pin it, and the browser shows First seen, Locks 30 minutes later and
+a "Seen by reviewer" timeline entry on `rpt_unseen`.
+
+## Still open in this change
+
+- Notifications, search and analytics.
