@@ -64,3 +64,24 @@
       reserved and the old address never claimable.
 - [ ] 7.8 Polish: the reworded orange rule, the device-storage audit, a screen-reader pass, 200 percent zoom and
       the term audit.
+
+## Validation, 2026-10-26
+
+| Step | Command | Result |
+|---|---|---|
+| Types | `npx tsc --noEmit` | clean (the generated route validator cache is stale after adding `/super-admin`, rebuilt by `npm run build`) |
+| Tests | `npm test` | 190 pass, 0 fail (was 166) |
+| Build | `npm run build` | 33/33 pages, including `/super-admin` and `/super-admin/workspaces/[id]` |
+| Detector | `impeccable detect` on the three screens | `[]` |
+| Specs | `openspec validate --all --strict` | 11 passed, 0 failed |
+
+Browser, dark, 1440:
+
+- Settings on Starter: the schedule reads "Weekly, starting Mondays at 17:00 (Africa/Lagos). Takes effect from the period starting Mon 2 Nov 2026.", the AI switch is disabled with "Team includes the Assistant and AI drafting", Export reports is enabled and Audit file is disabled with "Enterprise".
+- Assistant on Starter: input disabled, the same gate reason, suggestions visible but inert.
+- Console at `/super-admin`: four Workspaces with plan state, no dashboard navigation anywhere, and the operator note. Opening Meridian writes "Opened Meridian Health Trust content" to the log before the read-only banner renders, and there is no Workspace switcher.
+
+## Still open in this change
+
+- A positive Assistant answer is unreachable in the browser with the current samples: the only Admin Membership is in a Starter Workspace with AI off. `scripts/assistant.test.ts` proves the answers, and one Team Workspace with an Admin Membership would make it clickable.
+- The polish audit table covers the screens built so far; the remaining rows (zoom pass, screen-reader pass) are for the end-of-frontend pass.

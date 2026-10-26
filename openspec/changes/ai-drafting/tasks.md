@@ -24,3 +24,14 @@
 ## 4. Order
 
 - [ ] 4.1 Build after the assistant change, because it reads the same entitlement and the same audit module.
+
+## Validation, 2026-10-26
+
+`src/lib/drafting.ts` holds `gate` (plan first, switch second), `mergeDraft` (a blank section takes the
+suggestion, a filled one waits for a yes), `sanitizeSuggestion` (tags stripped, so the editor only ever gets
+text) and a simulated `requestSuggestion`. Six expectations in `scripts/drafting.test.ts` pin them.
+
+The control sits above the three sections in the submit form: it never submits, it audits
+`draft.requested`, and when typed text would be replaced it asks Keep my text or Replace first.
+
+`npm test` 190 pass 0 fail, build 33/33, `tsc` clean, detector `[]`.

@@ -17,6 +17,8 @@ OpenSpec changes under `openspec/changes/`; there is no other spec location.
 | 2026-10-26 | UI-8 review queue: scoped tabs, decision dialogs with required reasons, bulk approve and the not-submitted list | `tsc` + `npm test` 107/107 + build + browser |
 | 2026-10-26 | UI-9 comments and tasks: threads on a Report with a follow-up task, and the board with role views, filters, GSAP drag and drop, and a 14 day Done window | `tsc` + `npm test` 132/132 + build + browser |
 | 2026-10-26 | UI-10 to UI-13: Home, notifications with preferences, Ctrl K search and analytics with a table view | `tsc` + `npm test` 166/166 + build + browser |
+| 2026-10-26 | UI-14 to UI-16: settings with schedule, AI switch and exports, the Assistant, and the isolated Super Admin console | `tsc` + `npm test` 190/190 + build + browser |
+| 2026-10-26 | AI drafting: plan and switch gate, no silent overwrite, output treated as text | `tsc` + `npm test` 190/190 + build |
 | 2026-10-26 | Status vocabulary (`src/lib/status.ts`) with seven states, tones and per-state icons, plus the theme cookie renamed `reportlee-theme` and scoped to `*.reportlee.app` | `tsc` + `npm test` 15/15 + build + browser |
 | 2026-10-26 | Three roles on the landing page: Staff, Head of Space, Workspace Admin, with Admins shown as monitors who never author | `tsc` + build + browser |
 | 2026-10-26 | Department renamed to Space in code, copy and file names: `space-step.tsx`, `SPACE_LIMIT`, `?step=spaces` | `tsc` + build + browser |

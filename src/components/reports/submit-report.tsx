@@ -6,6 +6,7 @@ import {
   Location01Icon,
   PlusSignIcon,
   Search01Icon,
+  SparklesIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
@@ -22,6 +23,7 @@ import {
   type Report,
   type ReportDraft,
   type ReportLocation,
+  periodLabel,
   SAMPLE_KPI_TEMPLATE,
   SAMPLE_NOW,
   SAMPLE_PERIOD,
@@ -61,6 +63,13 @@ import {
 } from "@/lib/reports";
 import { SUBMISSION_STATUS } from "@/lib/status";
 import { cn } from "@/lib/utils";
+import { recordAudit } from "@/lib/audit";
+import {
+  gate,
+  mergeDraft,
+  requestSuggestion,
+  type Suggestion,
+} from "@/lib/drafting";
 import { RichTextSection } from "./rich-text-section";
 
 /* @info - The whole form is tidy, not guarded: the server decides who may submit. The
@@ -103,6 +112,12 @@ function emptyForm(spaceName: string | null): Form {
 
 const debounceMs = 600;
 
+/** The editor stores HTML, so generated text becomes one escaped paragraph. */
+function wrap(text: string): string {
+  if (text.trim() === "") return "";
+  return `<p>${text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`;
+}
+
 const SECTION_LABEL: Record<
   "accomplishments" | "challenges" | "plans",
   string
@@ -125,6 +140,71 @@ function draftFromForm(form: Form, base: ReportDraft): ReportDraft {
     location: form.location,
     updatedAt: new Date().toISOString(),
   };
+}
+
+function DraftWithAi({
+  gate: state,
+  busy,
+  onDraft,
+  pending,
+  onReplace,
+  onKeep,
+  notice,
+}: {
+  gate: { allowed: boolean; reason: string | null };
+  busy: boolean;
+  onDraft: () => void;
+  pending: boolean;
+  onReplace: () => void;
+  onKeep: () => void;
+  notice: string | null;
+}) {
+  return (
+    <div className="mt-6">
+      <button
+        type="button"
+        onClick={onDraft}
+        disabled={!state.allowed || busy}
+        title={state.reason ?? undefined}
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-hairline px-3 text-[12.5px] text-ink/75 disabled:opacity-40"
+      >
+        <HugeiconsIcon icon={SparklesIcon} className="size-3.5" />
+        {busy ? "Drafting…" : "Draft with AI"}
+      </button>
+
+      {state.allowed ? null : (
+        <p className="mt-1 text-[11.5px] text-ink/50">{state.reason}</p>
+      )}
+
+      {pending ? (
+        <div className="mt-2 rounded-md border border-hairline bg-surface-muted px-3 py-2">
+          <p className="text-[12.5px] text-ink">
+            The suggestion would replace text you typed. Replace it?
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onKeep}
+              className="min-h-9 rounded-md border border-hairline px-3 text-[12px] text-ink/70"
+            >
+              Keep my text
+            </button>
+            <button
+              type="button"
+              onClick={onReplace}
+              className="min-h-9 rounded-md bg-ink px-3 text-[12px] text-surface"
+            >
+              Replace
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {notice ? (
+        <p className="mt-1 text-[11.5px] text-ink/55">{notice}</p>
+      ) : null}
+    </div>
+  );
 }
 
 function formFromDraft(draft: ReportDraft): Form {
@@ -163,6 +243,26 @@ export function SubmitReport() {
   const router = useRouter();
 
   const [form, setForm] = useState<Form>(() => emptyForm(membership.space));
+  const [drafting, setDrafting] = useState(false);
+  const [draftNotice, setDraftNotice] = useState<string | null>(null);
+  const [pendingSuggestion, setPendingSuggestion] = useState<Suggestion | null>(
+    null,
+  );
+
+  const draftGate = gate({
+    plan: workspace.plan,
+    aiEnabled: workspace.aiFeatures,
+  });
+
+  /** Sections arrive as text; the editor stores markup, so a paragraph is the safe shape. */
+  const applySuggestion = (suggestion: Suggestion) => {
+    setForm((current) => ({
+      ...current,
+      accomplishments: wrap(suggestion.accomplishments),
+      challenges: wrap(suggestion.challenges),
+      plans: wrap(suggestion.plans),
+    }));
+  };
   const [counts, setCounts] = useState<Counts>({
     accomplishments: 0,
     challenges: 0,
@@ -615,6 +715,60 @@ export function SubmitReport() {
           {banner}
         </p>
       ) : null}
+
+      <DraftWithAi
+        gate={draftGate}
+        busy={drafting}
+        onDraft={async () => {
+          setDrafting(true);
+          try {
+            const proposal = await requestSuggestion({
+              periodLabel: periodLabel(SAMPLE_PERIOD.id),
+              spaceName: membership.space,
+            });
+            const typed = {
+              accomplishments: form.accomplishments,
+              challenges: form.challenges,
+              plans: form.plans,
+            };
+            const merged = mergeDraft(typed, proposal);
+            if (merged.needsConfirm) {
+              setPendingSuggestion(proposal);
+              setDraftNotice(
+                "You have already written something. Say yes before it is replaced.",
+              );
+            } else {
+              applySuggestion(merged.sections);
+              setDraftNotice(
+                "Drafted. Nothing is sent until you press the action below.",
+              );
+            }
+            recordAudit(window.localStorage, membership.id, {
+              at: new Date().toISOString(),
+              actorMembershipId: membership.id,
+              action: "draft.requested",
+              target: SAMPLE_PERIOD.id,
+              summary: "Drafting requested",
+            });
+          } catch {
+            setDraftNotice("Drafting failed. Nothing changed.");
+          } finally {
+            setDrafting(false);
+          }
+        }}
+        pending={pendingSuggestion !== null}
+        onReplace={() => {
+          if (!pendingSuggestion) return;
+          applySuggestion(pendingSuggestion);
+          setPendingSuggestion(null);
+          setDraftNotice("Replaced with the suggestion.");
+        }}
+        onKeep={() => {
+          setPendingSuggestion(null);
+          setDraftNotice("Kept your text.");
+        }}
+        notice={draftNotice}
+      />
 
       <form
         className="mt-6 flex flex-col gap-4"
