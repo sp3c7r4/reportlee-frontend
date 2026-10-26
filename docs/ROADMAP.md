@@ -18,6 +18,7 @@ OpenSpec changes under `openspec/changes/`; there is no other spec location.
 | 2026-10-26 | UI-9 comments and tasks: threads on a Report with a follow-up task, and the board with role views, filters, GSAP drag and drop, and a 14 day Done window | `tsc` + `npm test` 132/132 + build + browser |
 | 2026-10-26 | UI-10 to UI-13: Home, notifications with preferences, Ctrl K search and analytics with a table view | `tsc` + `npm test` 166/166 + build + browser |
 | 2026-10-26 | UI-14 to UI-16: settings with schedule, AI switch and exports, the Assistant, and the isolated Super Admin console | `tsc` + `npm test` 190/190 + build + browser |
+| 2026-10-26 | UI-17 polish: every dashboard route and the console rendered, console clean, 200% zoom without scroll, accessible names present | browser + `tsc` + `npm test` 190/190 + build 33/33 |
 | 2026-10-26 | AI drafting: plan and switch gate, no silent overwrite, output treated as text | `tsc` + `npm test` 190/190 + build |
 | 2026-10-26 | Status vocabulary (`src/lib/status.ts`) with seven states, tones and per-state icons, plus the theme cookie renamed `reportlee-theme` and scoped to `*.reportlee.app` | `tsc` + `npm test` 15/15 + build + browser |
 | 2026-10-26 | Three roles on the landing page: Staff, Head of Space, Workspace Admin, with Admins shown as monitors who never author | `tsc` + build + browser |
@@ -57,13 +58,8 @@ search that never reveals what a person cannot open, and role-scoped analytics.
 
 ## Specified, not started
 
-Seven OpenSpec changes cover every remaining UI task: `shared-records` (the comment shape, the audit log, the
-event stream and the plan gate), `people-and-setup` (UI-4 and UI-5), `review-queue` (UI-8),
-`comments-and-tasks` (UI-9), `insight-screens` (UI-10 to UI-13), `platform-and-polish` (UI-14 to UI-17) and
-`ai-drafting`. `openspec validate --all --strict` passes 11 of 11.
-
-Build order: shared modules first, then people-and-setup, review-queue, comments-and-tasks, insight-screens,
-platform-and-polish, then ai-drafting. One at a time, each stopping for approval at its validation gate.
+Nothing. Every UI task from UI-1 to UI-17 and the ai-drafting change is built; `openspec validate --all
+--strict` passes 11 of 11. The frontend is feature-complete on sample data and the backend is the next repo.
 
 ## Backlog (known, not started)
 

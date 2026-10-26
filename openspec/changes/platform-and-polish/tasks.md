@@ -81,7 +81,30 @@ Browser, dark, 1440:
 - Assistant on Starter: input disabled, the same gate reason, suggestions visible but inert.
 - Console at `/super-admin`: four Workspaces with plan state, no dashboard navigation anywhere, and the operator note. Opening Meridian writes "Opened Meridian Health Trust content" to the log before the read-only banner renders, and there is no Workspace switcher.
 
+## Polish audit, 2026-10-26
+
+| Screen | Render | Console | 200% zoom | Names | Touch targets | Notes |
+|---|---|---|---|---|---|---|
+| `/dashboard` | 200, one h1 | clean | no scroll, nothing clipped | every button named | 44px from sm up | Empty state reads "Nothing needs you right now" |
+| `/dashboard/reports` | 200 | clean | clean | named | 44px | Filters are tabs, rows a grid |
+| `/dashboard/reports/new` | 200 | clean | clean | named | 44px | Draft with AI states its gate |
+| `/dashboard/reports/[id]` | 200 | clean | clean | named | 44px | Details and Timeline start level with the title |
+| `/dashboard/review` | 200 | clean | clean | named | 44px | Reasons required on Reject and Reopen |
+| `/dashboard/tasks` | 200 | clean | clean | named | 44px | Drag is pointer only; Move to covers phones |
+| `/dashboard/members` | 200 | clean | clean | named | 36px row actions, 44px at phone width | Nowrap lives on action chips, not prose |
+| `/dashboard/spaces` and one Space | 200 | clean | clean | named | 44px | Archive states its guard |
+| `/dashboard/notifications` and preferences | 200 | clean | clean | switches named | 44px | Invitations and security have no switch |
+| `/dashboard/search` | 200 | clean | clean | named | 44px | Overlay scrim matches the dialog |
+| `/dashboard/analytics` and `/dashboard/my-record` | 200 | clean | clean | named | 44px | Small-sample banner; table view |
+| `/dashboard/settings` and audit | 200 | clean | clean | named | 44px | One banner, no money computed |
+| `/dashboard/assistant` | 200 | clean | clean | named | 44px | Gate sentence when the plan or switch blocks it |
+| `/super-admin` and one Workspace | 200 | clean | clean | named | 44px | No dashboard navigation; audit written before the read |
+
+Every route answered 200 with a title and a non-empty body. The dashboard routes carry the shell; the console does
+not, which is the isolation the spec asks for.
+
 ## Still open in this change
 
 - A positive Assistant answer is unreachable in the browser with the current samples: the only Admin Membership is in a Starter Workspace with AI off. `scripts/assistant.test.ts` proves the answers, and one Team Workspace with an Admin Membership would make it clickable.
-- The polish audit table covers the screens built so far; the remaining rows (zoom pass, screen-reader pass) are for the end-of-frontend pass.
+- Row action chips in the members table are 36px tall from `sm` up. The 44px floor holds at phone width; on desktop the tablet target convention was chosen deliberately.
+- No screen-reader software was run; the pass checked accessible names, one h1 per page and switch roles in the served markup.
