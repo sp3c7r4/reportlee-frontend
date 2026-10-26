@@ -76,10 +76,15 @@ Known gap in the sample data, recorded not fixed: all five Platform Reports are 
 and share one period, so the Space reads "1 of 3 submitted this period" and 5 reports. One person, one
 Report per period is the real rule; the samples need spreading across authors and periods.
 
+## The template reaches the form, 2026-10-26
+
+`templateFor(spaceName, spaces)` in `src/lib/spaces.ts` is the one lookup the submit form now uses, so a new
+Report starts from the viewer's Space template and falls back to `SAMPLE_KPI_TEMPLATE` when the Membership
+has no Space (every Admin does). Pinned in `scripts/spaces.test.ts`; `npm test` 94 pass 0 fail, build 20/20.
+
 ## Still open in this change
 
-- The KPI template is editable and saved on the page, but the Report form still prefills from
-  `SAMPLE_KPI_TEMPLATE` rather than the Space's template.
+- Nothing recorded. The three remaining `/onboarding` resume steps are the next thing after `review-queue`.
 
 ## Refinement, 2026-10-26
 

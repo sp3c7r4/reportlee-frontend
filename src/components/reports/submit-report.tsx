@@ -12,6 +12,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TopBarAction, useShell } from "@/components/dashboard/shell-context";
+import { SPACES } from "@/data/members";
+import { templateFor } from "@/lib/spaces";
 import { Button } from "@/components/ui/button";
 import {
   type Attachment,
@@ -82,19 +84,22 @@ type Form = {
 
 type Counts = Record<"accomplishments" | "challenges" | "plans", number>;
 
-const EMPTY_FORM: Form = {
-  accomplishments: "",
-  challenges: "",
-  plans: "",
-  rows: SAMPLE_KPI_TEMPLATE.map((field, index) => ({
-    ...field,
-    id: `row-${index}`,
-    raw: "",
-  })),
-  attachments: [],
-  taggedMembershipIds: [],
-  location: null,
-};
+function emptyForm(spaceName: string | null): Form {
+  const rows = templateFor(spaceName, SPACES) ?? SAMPLE_KPI_TEMPLATE;
+  return {
+    accomplishments: "",
+    challenges: "",
+    plans: "",
+    rows: rows.map((field, index) => ({
+      ...field,
+      id: `row-${index}`,
+      raw: "",
+    })),
+    attachments: [],
+    taggedMembershipIds: [],
+    location: null,
+  };
+}
 
 const debounceMs = 600;
 
@@ -157,7 +162,7 @@ export function SubmitReport() {
   const { membership, workspace, user } = useShell();
   const router = useRouter();
 
-  const [form, setForm] = useState<Form>(EMPTY_FORM);
+  const [form, setForm] = useState<Form>(() => emptyForm(membership.space));
   const [counts, setCounts] = useState<Counts>({
     accomplishments: 0,
     challenges: 0,
@@ -271,7 +276,9 @@ export function SubmitReport() {
       accomplishments: "",
       challenges: "",
       plans: "",
-      kpis: SAMPLE_KPI_TEMPLATE.map((field) => ({ ...field, value: null })),
+      kpis: (templateFor(membership.space, SPACES) ?? SAMPLE_KPI_TEMPLATE).map(
+        (field) => ({ ...field, value: null }),
+      ),
       attachments: [],
       taggedMembershipIds: [],
       location: null,
@@ -280,7 +287,9 @@ export function SubmitReport() {
       updatedAt: SAMPLE_NOW,
     };
     const draft = existing ?? fresh;
-    const nextForm = existing ? formFromDraft(existing) : EMPTY_FORM;
+    const nextForm = existing
+      ? formFromDraft(existing)
+      : emptyForm(membership.space);
     setBase(draft);
     setForm(nextForm);
     setCounts(countsOf(nextForm));

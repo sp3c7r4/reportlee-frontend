@@ -117,6 +117,16 @@ export function canEditTemplate(
   };
 }
 
+/** The template a new Report in this Space starts from, or null when there is none. */
+export function templateFor(
+  spaceName: string | null,
+  spaces: SpaceSummary[],
+): KpiTemplateField[] | null {
+  if (!spaceName) return null;
+  const space = spaces.find((row) => row.name === spaceName);
+  return space ? space.kpiTemplate : null;
+}
+
 /** A Report that already has rows keeps them: a template change is for the next one. */
 export function applyTemplate(
   template: KpiTemplateField[],

@@ -8,6 +8,7 @@ import {
   reportsInSpace,
   spaceById,
   spaceStats,
+  templateFor,
 } from "../src/lib/spaces.ts";
 
 /* @info - The rules of one Space's page, written from the spec before the module
@@ -123,4 +124,14 @@ test("a draft that has rows keeps them when the template changes", () => {
   const existing = [{ name: "Old KPI", unit: "count", value: 3 }];
   const rows = applyTemplate([{ name: "New KPI", unit: "count" }], existing);
   assert.deepEqual(rows, existing);
+});
+
+test("a new Report starts from its Space's template", () => {
+  const rows = templateFor("Platform", SPACES);
+  assert.deepEqual(
+    rows?.map((field) => field.name),
+    ["Reports reviewed", "Incidents closed", "Training sessions"],
+  );
+  assert.equal(templateFor(null, SPACES), null, "an Admin belongs to no Space");
+  assert.equal(templateFor("Nowhere", SPACES), null);
 });
