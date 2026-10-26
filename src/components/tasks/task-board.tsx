@@ -106,6 +106,87 @@ export function TaskBoard() {
     setLoaded(true);
   }, [viewer]);
 
+  /**
+   * Pointer drag, not native HTML5 drag: the native path silently refuses in some
+   * browsers and gives no way to tell a person why. Touch is excluded on purpose, so a
+   * finger scrolls the page and the Move to menu is the phone's way to move a card.
+   */
+  const startDrag = (event: React.PointerEvent<HTMLElement>, task: Task) => {
+    if (!canMove(task)) return;
+    if (event.pointerType === "touch") return;
+    event.preventDefault();
+
+    const card = event.currentTarget;
+    const origin = { x: event.clientX, y: event.clientY };
+    let target: TaskStatus | null = null;
+    const follow = gsap.quickTo(card, "x", {
+      duration: 0.12,
+      ease: "power2.out",
+    });
+    const followY = gsap.quickTo(card, "y", {
+      duration: 0.12,
+      ease: "power2.out",
+    });
+
+    setDragging(task.id);
+    gsap.set(card, { zIndex: 40, scale: 1.02, rotate: 1.2 });
+    card.style.cursor = "grabbing";
+    // Window listeners, so the card keeps following even when the pointer leaves it.
+    try {
+      card.setPointerCapture(event.pointerId);
+    } catch {
+      /* capture is a nicety, not the mechanism */
+    }
+
+    const move = (next: PointerEvent) => {
+      follow(next.clientX - origin.x);
+      followY(next.clientY - origin.y);
+      const under = document
+        .elementFromPoint(next.clientX, next.clientY)
+        ?.closest<HTMLElement>("[data-column]");
+      const column = (under?.dataset.column as TaskStatus | undefined) ?? null;
+      target = column;
+      setOverColumn(column);
+    };
+
+    const end = (next: PointerEvent) => {
+      try {
+        card.releasePointerCapture(event.pointerId);
+      } catch {
+        /* already released */
+      }
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      card.style.cursor = "";
+      setOverColumn(null);
+      setDragging(null);
+      gsap.to(card, {
+        x: 0,
+        y: 0,
+        scale: 1,
+        rotate: 0,
+        zIndex: 0,
+        duration: 0.22,
+        ease: "power2.out",
+      });
+
+      const landed = target;
+      if (!landed || landed === task.status) return;
+      if (landed === "done") {
+        setMoving({ task, status: landed });
+        return;
+      }
+      apply(task, landed);
+      setSettling(task.id);
+      void next;
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+
   const persist = (next: Task[]) => {
     setTasks(next);
     try {
@@ -252,39 +333,7 @@ export function TaskBoard() {
           {columns.map((column) => (
             <section
               key={column.status}
-              onDragOver={(event) => {
-                if (!dragging) return;
-                const task = tasks.find((row) => row.id === dragging);
-                if (!task || !canMove(task) || task.status === column.status)
-                  return;
-                event.preventDefault();
-                // State first: an engine that refuses the dataTransfer assignment must
-                // not also swallow the highlight.
-                setOverColumn(column.status);
-                try {
-                  event.dataTransfer.dropEffect = "move";
-                } catch {
-                  /* read-only dataTransfer */
-                }
-              }}
-              onDragLeave={() => {
-                if (overColumn === column.status) setOverColumn(null);
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                const id = event.dataTransfer.getData("text/plain") || dragging;
-                const task = tasks.find((row) => row.id === id);
-                setOverColumn(null);
-                setDragging(null);
-                if (!task || !canMove(task) || task.status === column.status)
-                  return;
-                if (column.status === "done") {
-                  setMoving({ task, status: column.status });
-                  return;
-                }
-                apply(task, column.status);
-                setSettling(task.id);
-              }}
+              data-column={column.status}
               className={cn(
                 "rounded-lg border border-hairline transition-colors",
                 overColumn === column.status &&
@@ -303,42 +352,11 @@ export function TaskBoard() {
                     <article
                       key={task.id}
                       data-card={task.id}
-                      draggable={canMove(task)}
-                      onDragStart={(event) => {
-                        if (!canMove(task)) {
-                          event.preventDefault();
-                          return;
-                        }
-                        setDragging(task.id);
-                        try {
-                          event.dataTransfer.effectAllowed = "move";
-                          event.dataTransfer.setData("text/plain", task.id);
-                        } catch {
-                          /* a dataTransfer that refuses still drags */
-                        }
-                        if (window.matchMedia(MOTION_OK).matches) {
-                          gsap.to(event.currentTarget, {
-                            scale: 1.02,
-                            rotate: 1.2,
-                            duration: 0.18,
-                            ease: "power2.out",
-                          });
-                        }
-                      }}
-                      onDragEnd={(event) => {
-                        setDragging(null);
-                        setOverColumn(null);
-                        gsap.to(event.currentTarget, {
-                          scale: 1,
-                          rotate: 0,
-                          duration: 0.2,
-                          ease: "power2.out",
-                        });
-                      }}
+                      onPointerDown={(event) => startDrag(event, task)}
                       className={cn(
                         "rounded-md border border-hairline bg-surface p-3",
-                        canMove(task) && "cursor-grab active:cursor-grabbing",
-                        dragging === task.id && "opacity-60",
+                        canMove(task) && "cursor-grab select-none",
+                        dragging === task.id && "opacity-60 shadow-float",
                       )}
                     >
                       <p className="text-[13px] text-ink">{task.title}</p>

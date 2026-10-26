@@ -62,9 +62,23 @@ Browser, dark, 1440:
 - Drag into Done opens the completion dialog; a note typed there is kept and shown on the card.
 - On `rpt_rejected` the Discussion section shows the reviewer's thread with the author's reply, a composer and "2 follow-up tasks on this Report".
 
-## Drag and drop, 2026-10-26
+## Drag and drop, revised 2026-10-26
 
-Cards are native drag sources, enabled only where the move is allowed, so a card never lifts and then refuses. GSAP does the lift, the drop target highlight and the settle, all inside `MOTION_OK`, so a reduced motion visitor gets no animation and the same move.
+The first build used native HTML5 drag. It refused in a real browser: the card lifted and the drop did nothing,
+with no way to tell a person why. It is replaced by pointer dragging, which is what the person was actually
+doing:
+
+- `pointerdown` on a card starts the drag only where the move is allowed, and only for a pointer that is not
+  touch, so a finger still scrolls the page and the Move to menu remains the phone's way to move a card.
+- The card follows with two GSAP `quickTo` tweens, so the movement is smooth rather than stepping.
+- The column under the pointer is found with `elementFromPoint`, and it highlights while the card is over it.
+- On release the card settles back into place with one GSAP tween; a drop into Done opens the completion
+  dialog instead of moving.
+- Listeners live on `window`, so the drag survives the pointer leaving the card.
+
+Measured with a pointer sequence in the browser at 1440 as Staff: the card moved from Doing to To do, the
+target column highlighted, the notice read "Moved to To do.", and the card's transform was cleared after the
+settle.
 
 ## Still open in this change
 
