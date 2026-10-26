@@ -1,0 +1,281 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* ------------------------------------------------------------------
+   * Reportlee visual system.
+   *
+   * One accent (brand orange), a cool-biased neutral scale (zinc), a real
+   * semantic palette (success / info / warning / danger). Light mode is a near
+   * white page with pure white cards and a visible 1px border; dark mode is
+   * near-black with a clearly lifted card surface and visible borders. Shadows
+   * are supplementary, borders carry the hierarchy.
+   *
+   * ------------------------------------------------------------------ */
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-soft: var(--brand-soft);
+  --color-ink: var(--ink);
+  --color-charcoal: var(--charcoal);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-surface-muted: var(--surface-muted);
+  --color-hairline: var(--hairline);
+  --color-success: var(--success);
+  --color-info: var(--info);
+  --color-notice: var(--notice);
+  --color-warning: var(--warning);
+
+  /* shadcn primitives inherit the brand through these */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-on-ink: var(--on-ink);
+  --color-photo-scrim: var(--photo-scrim);
+
+  /* type: Satoshi, with the 600 pin kept because the family skips that weight. */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-sans);
+  --font-heading: var(--font-sans);
+  --font-weight-semibold: 700;
+
+  /* geometry: 10px cards, 8px inputs, pill for status and avatars only. */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 14px;
+  --radius-3xl: 18px;
+  --radius-4xl: 9999px;
+
+  --shadow-card: 0 1px 2px rgb(10 10 11 / 0.04), 0 1px 1px rgb(10 10 11 / 0.03);
+  --shadow-float:
+    0 4px 10px -2px rgb(10 10 11 / 0.06), 0 2px 4px -2px rgb(10 10 11 / 0.04);
+  --shadow-lift: 0 20px 40px -20px rgb(10 10 11 / 0.18);
+
+  --animate-status-pulse: status-pulse 2.4s ease-in-out infinite;
+}
+
+/* ------------------------------------------------------------------
+ * Dark theme: cool near-black with a clearly lifted card surface.
+ *
+ * Page #0A0A0B, surface (card) #141416, raised panel #1C1C1F. The border is
+ * #27272A, visible on both surfaces. The accent lifts one step to #FF7E42 so
+ * it does not vibrate on dark neutrals.
+ * ------------------------------------------------------------------ */
+.dark {
+  color-scheme: dark;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.6);
+  --shadow-float: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+  --shadow-lift: 0 20px 40px -20px rgb(0 0 0 / 0.7);
+
+  /* Semantic palette, dark values. All read as a 2px dot plus a soft 12% tint
+     when combined with /12 in Tailwind, with foreground kept above 5:1 against
+     the tint on #141416. */
+  --success: #34d399;
+  --info: #60a5fa;
+  --notice: #7c3aed;
+  --warning: #fbbf24;
+  --destructive: #f87171;
+
+  /* The shadcn alias block is re-declared here because dialogs render in
+     portals outside this element and would otherwise inherit the light values. */
+  --background: var(--surface);
+  --foreground: var(--ink);
+  --card: var(--surface-alt);
+  --card-foreground: var(--ink);
+  --popover: var(--surface-alt);
+  --popover-foreground: var(--ink);
+  --muted: var(--surface-muted);
+  --accent: var(--surface-muted);
+  --accent-foreground: var(--ink);
+  --border: var(--hairline);
+  --input: var(--hairline);
+  --ring: var(--brand);
+
+  --surface: #0a0a0b;
+  --surface-alt: #141416;
+  --surface-muted: #1c1c1f;
+  --ink: #fafafa;
+  --charcoal: #e4e4e7;
+  --hairline: #27272a;
+  --muted-foreground: #a1a1aa;
+  --brand-soft: #2a1a12;
+  --on-ink: #0a0a0b;
+}
+
+/* ------------------------------------------------------------------
+ * Light theme: near-white page with pure white cards and visible borders.
+ *
+ * The page is #FAFAFA so cards (#FFFFFF) have a step of luminance to sit on;
+ * the hairline is #E4E4E7 which reads on both without a shadow doing the work.
+ * ------------------------------------------------------------------ */
+:root {
+  --font-sans:
+    "Satoshi", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --brand: #ff6b2c;
+  --brand-hover: #e85a1e;
+  --brand-soft: #fff4ee;
+  --ink: #09090b;
+  --charcoal: #18181b;
+  --surface: #fafafa;
+  --surface-alt: #ffffff;
+  --surface-muted: #f4f4f5;
+  --hairline: #e4e4e7;
+  --success: #059669;
+  --info: #1d4ed8;
+  --notice: #a78bfa;
+  --warning: #b45309;
+  --destructive: #b91c1c;
+
+  --background: var(--surface);
+  --foreground: var(--ink);
+  --card: var(--surface-alt);
+  --card-foreground: var(--ink);
+  --popover: var(--surface-alt);
+  --popover-foreground: var(--ink);
+  --primary: var(--brand);
+  --primary-foreground: #ffffff;
+  --secondary: var(--surface-muted);
+  --secondary-foreground: var(--ink);
+  --muted: var(--surface-muted);
+  --muted-foreground: #52525b;
+  /* "accent" is shadcn's hover/highlight surface across every primitive
+     (dropdown, select, context menu). Keeping it neutral stops orange from
+     painting the thing a reader is only pointing at: the brand hue stays for
+     the one real action, and the pointer gets quiet grey. */
+  --accent: var(--surface-muted);
+  --accent-foreground: var(--ink);
+  --border: var(--hairline);
+  --input: var(--hairline);
+  --ring: var(--brand);
+
+  --on-ink: #ffffff;
+  --photo-scrim: #0a0a0b;
+}
+
+/* The signed-in rail scrolls on a short window. An unthemed scrollbar is a browser
+   surface sitting inside the frame, so it takes the palette like everything else. */
+.rail-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline) transparent;
+}
+.rail-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.rail-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.rail-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--hairline);
+  border-radius: 9999px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+    scroll-behavior: smooth;
+    scrollbar-color: #d4d4d8 transparent;
+    scrollbar-width: thin;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    @apply bg-surface text-ink antialiased;
+    font-feature-settings: "ss01", "cv01";
+  }
+
+  ::selection {
+    background: var(--brand-soft);
+    color: var(--brand-hover);
+  }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--ink);
+    caret-color: var(--ink);
+    box-shadow: inset 0 0 0 100px var(--surface-alt);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer components {
+  .mosaic-fade {
+    mask-image: radial-gradient(
+      ellipse 70% 46% at 50% 50%,
+      transparent 44%,
+      rgb(0 0 0 / 0.5) 70%,
+      #000 100%
+    );
+
+    @media (width >= 40rem) {
+      mask-image: radial-gradient(
+        ellipse 46% 42% at 50% 47%,
+        transparent 40%,
+        rgb(0 0 0 / 0.45) 70%,
+        #000 100%
+      );
+    }
+  }
+
+  .wordmark {
+    color: color-mix(in oklab, var(--ink) 62%, transparent);
+    transition: color 300ms;
+
+    &:hover {
+      color: var(--ink);
+    }
+  }
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
