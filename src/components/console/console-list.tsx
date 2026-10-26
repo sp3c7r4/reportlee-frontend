@@ -6,11 +6,11 @@ import { SPACES } from "@/data/members";
 import { SAMPLE_PERIOD, SAMPLE_REPORTS } from "@/data/reports";
 import { WORKSPACES } from "@/data/viewer";
 import {
-  type PlatformAction,
   auditLine,
   OPERATOR,
-  planDisplay,
   type PlanState,
+  type PlatformAction,
+  planDisplay,
   renameProblem,
 } from "@/lib/console";
 

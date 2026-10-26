@@ -3,7 +3,7 @@
 import { SparklesIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useShell } from "@/components/dashboard/shell-context";
 import { CO_LEAGUE_ROSTER } from "@/data/members";
 import { SAMPLE_PERIOD, SAMPLE_REPORTS } from "@/data/reports";
@@ -35,17 +35,22 @@ export function AssistantScreen() {
     [membership.id, membership.role, membership.space],
   );
 
+  const [transcriptFor, setTranscriptFor] = useState(membership.id);
+
   const gate = assistantGate({
     plan: workspace.plan,
     aiEnabled: workspace.aiFeatures,
   });
 
-  useEffect(() => {
-    setAsked([]);
-    setQuestion("");
-  }, [membership.id]);
-
   const ask = (text: string) => {
+    // Switching Workspace clears the transcript through the key below.
+    const key = viewer.membershipId;
+    if (key !== transcriptFor) {
+      setTranscriptFor(key);
+      setAsked([]);
+      setQuestion("");
+    }
+
     const trimmed = text.trim();
     if (trimmed === "") return;
     try {

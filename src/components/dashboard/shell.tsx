@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SearchOverlay } from "@/components/search/search-panel";
 import {
   type Membership,
   membershipById,
@@ -13,7 +14,6 @@ import { readSession } from "@/lib/session";
 import { sidebarCookie, type Theme, themeCookie } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { ShellDrawer } from "./drawer";
-import { SearchOverlay } from "@/components/search/search-panel";
 import { SetupBanner } from "./setup-banner";
 import { ShellContext, type ShellContextValue } from "./shell-context";
 import { Sidebar } from "./sidebar";

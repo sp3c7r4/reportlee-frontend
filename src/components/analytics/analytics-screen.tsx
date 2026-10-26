@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useShell } from "@/components/dashboard/shell-context";
 import { CO_LEAGUE_ROSTER } from "@/data/members";
-import { SAMPLE_NOW, SAMPLE_PERIOD, SAMPLE_REPORTS } from "@/data/reports";
+import { SAMPLE_PERIOD, SAMPLE_REPORTS } from "@/data/reports";
 import { analyticsFor } from "@/lib/analytics";
 import { savedReports } from "@/lib/reports";
 import { cn } from "@/lib/utils";

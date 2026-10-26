@@ -21,7 +21,7 @@ import {
   SAMPLE_REPORTS,
 } from "@/data/reports";
 import { SAMPLE_TASKS, type Task } from "@/data/tasks";
-import { homeFor, type HomeViewer } from "@/lib/home";
+import { type HomeViewer, homeFor } from "@/lib/home";
 import { draftKey, readDraft, savedReports } from "@/lib/reports";
 import { cn } from "@/lib/utils";
 
@@ -40,11 +40,14 @@ const KIND_ICON = {
 
 export function HomeScreen() {
   const { membership, workspace, user } = useShell();
-  const viewer: HomeViewer = {
-    membershipId: membership.id,
-    role: membership.role,
-    space: membership.space,
-  };
+  const viewer: HomeViewer = useMemo(
+    () => ({
+      membershipId: membership.id,
+      role: membership.role,
+      space: membership.space,
+    }),
+    [membership.id, membership.role, membership.space],
+  );
 
   const [reports, setReports] = useState<Report[] | null>(null);
   const [tasks, setTasks] = useState<Task[]>(SAMPLE_TASKS);
