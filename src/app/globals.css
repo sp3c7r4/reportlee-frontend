@@ -28,6 +28,7 @@
   --color-info: var(--info);
   --color-notice: var(--notice);
   --color-warning: var(--warning);
+  --color-sun: var(--sun);
 
   /* shadcn primitives inherit the brand through these */
   --color-background: var(--background);
@@ -98,6 +99,9 @@
   --notice: #7c3aed;
   --warning: #fbbf24;
   --destructive: #f87171;
+  /* A filled tag's ground. Light keeps the bright yellow; dark drops to a deeper
+     amber so white text on it clears 4.5:1. */
+  --sun: #a16207;
 
   /* The shadcn alias block is re-declared here because dialogs render in
      portals outside this element and would otherwise inherit the light values. */
@@ -149,6 +153,7 @@
   --notice: #a78bfa;
   --warning: #b45309;
   --destructive: #b91c1c;
+  --sun: #f5c518;
 
   --background: var(--surface);
   --foreground: var(--ink);

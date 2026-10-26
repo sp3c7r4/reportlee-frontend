@@ -5,6 +5,9 @@ import { SAMPLE_NOW } from "../src/data/reports.ts";
 import { SAMPLE_TASKS } from "../src/data/tasks.ts";
 import {
   assigneeProblem,
+  PRIORITY_LABEL,
+  priorityOf,
+  sortByPriority,
   dueProblem,
   effectiveView,
   moveTask,
@@ -215,4 +218,37 @@ test("a deactivated assignee is flagged so an Admin can reassign", () => {
   const problem = assigneeProblem(task, roster);
   assert.match(problem ?? "", /deactivated/i);
   assert.equal(assigneeProblem(task, CO_LEAGUE_ROSTER), null);
+});
+
+test("a task carries a priority, and a stored one keeps it", () => {
+  assert.equal(
+    priorityOf({ ...SAMPLE_TASKS[0], priority: "critical" }),
+    "critical",
+  );
+  assert.equal(PRIORITY_LABEL.critical, "Critical");
+  assert.deepEqual(Object.keys(PRIORITY_LABEL), [
+    "low",
+    "medium",
+    "high",
+    "critical",
+  ]);
+});
+
+test("a task saved before priority existed reads as medium", () => {
+  const legacy = { ...SAMPLE_TASKS[0] } as Record<string, unknown>;
+  delete legacy.priority;
+  assert.equal(priorityOf(legacy as never), "medium");
+});
+
+test("a column orders critical first and low last", () => {
+  const rows = sortByPriority([
+    { ...SAMPLE_TASKS[0], id: "a", priority: "low" },
+    { ...SAMPLE_TASKS[0], id: "b", priority: "critical" },
+    { ...SAMPLE_TASKS[0], id: "c", priority: "medium" },
+    { ...SAMPLE_TASKS[0], id: "d", priority: "high" },
+  ]);
+  assert.deepEqual(
+    rows.map((row) => row.priority),
+    ["critical", "high", "medium", "low"],
+  );
 });

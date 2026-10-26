@@ -1,5 +1,10 @@
 import type { RosterMember } from "../data/members";
-import { type Task, type TaskStatus, SAMPLE_TASKS } from "../data/tasks.ts";
+import {
+  type Priority,
+  type Task,
+  type TaskStatus,
+  SAMPLE_TASKS,
+} from "../data/tasks.ts";
 import type { Role } from "./nav";
 
 /**
@@ -14,6 +19,44 @@ export type TaskViewer = {
 };
 
 export type View = "mine" | "by" | "space" | "all";
+
+export const PRIORITY_LABEL: Record<Priority, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  critical: "Critical",
+};
+
+/** The tone the chip takes. Priority is severity, so it never borrows the brand colour. */
+export const PRIORITY_TONE: Record<
+  Priority,
+  "neutral" | "info" | "warning" | "danger"
+> = {
+  low: "neutral",
+  medium: "info",
+  high: "warning",
+  critical: "danger",
+};
+
+const PRIORITY_ORDER: Record<Priority, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+/** A task saved before priority existed reads as Medium rather than vanishing. */
+export function priorityOf(task: Task): Priority {
+  const stored = (task as { priority?: Priority }).priority;
+  return stored && stored in PRIORITY_ORDER ? stored : "medium";
+}
+
+export function sortByPriority(tasks: Task[]): Task[] {
+  return [...tasks].sort(
+    (left, right) =>
+      PRIORITY_ORDER[priorityOf(left)] - PRIORITY_ORDER[priorityOf(right)],
+  );
+}
 
 export const VIEW_LABEL: Record<View, string> = {
   mine: "Assigned to me",
@@ -181,6 +224,7 @@ export function newTask(input: {
   assigneeMembershipId: string;
   assignedByMembershipId: string;
   dueAt: string;
+  priority: Priority;
   now: string;
   id: string;
 }): Task {
@@ -192,6 +236,7 @@ export function newTask(input: {
     assignedByMembershipId: input.assignedByMembershipId,
     dueAt: input.dueAt,
     status: "todo",
+    priority: input.priority,
     completionNote: null,
     completionFile: null,
     completedAt: null,

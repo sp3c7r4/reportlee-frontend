@@ -17,7 +17,12 @@ import {
 } from "@/components/ui/dialog";
 import { CO_LEAGUE_ROSTER } from "@/data/members";
 import { SAMPLE_NOW } from "@/data/reports";
-import { type Task, SAMPLE_TASKS, type TaskStatus } from "@/data/tasks";
+import {
+  type Priority,
+  SAMPLE_TASKS,
+  type Task,
+  type TaskStatus,
+} from "@/data/tasks";
 import { recordAudit } from "@/lib/audit";
 import { gsap, MOTION_OK, useGSAP } from "@/lib/gsap";
 import {
@@ -28,6 +33,10 @@ import {
   moveTask,
   overdue,
   type TaskViewer,
+  PRIORITY_LABEL,
+  PRIORITY_TONE,
+  priorityOf,
+  sortByPriority,
   type View,
   VIEW_LABEL,
   viewsFor,
@@ -268,9 +277,11 @@ export function TaskBoard() {
   const columns = COLUMNS.map(([status, label]) => ({
     status,
     label,
-    cards: rows.filter(
-      (task) =>
-        task.status === status && inDoneWindow(task, SAMPLE_NOW, showOlder),
+    cards: sortByPriority(
+      rows.filter(
+        (task) =>
+          task.status === status && inDoneWindow(task, SAMPLE_NOW, showOlder),
+      ),
     ),
     hidden:
       status === "done"
@@ -345,14 +356,27 @@ export function TaskBoard() {
               key={column.status}
               data-column={column.status}
               className={cn(
-                "rounded-lg border border-hairline transition-colors",
-                overColumn === column.status &&
-                  "border-ink/40 bg-surface-muted",
+                "rounded-xl border border-hairline transition-colors",
+                overColumn === column.status
+                  ? "border-ink/40 bg-ink/[0.06]"
+                  : "bg-surface-muted/40",
               )}
             >
-              <h2 className="flex items-center justify-between bg-surface-muted px-3.5 py-2 font-medium text-[11.5px] text-ink/55 uppercase tracking-wide">
-                {column.label}
-                <span className="tabular-nums">{column.cards.length}</span>
+              <h2 className="flex items-center gap-1.5 border-hairline border-b px-3 py-2">
+                <span
+                  className={cn(
+                    "rounded-md px-2 py-1 font-semibold text-[11.5px]",
+                    column.status === "todo" && "bg-ink text-surface",
+                    column.status === "doing" && "bg-sun text-ink dark:text-white",
+                    column.status === "done" &&
+                      "bg-success text-surface",
+                  )}
+                >
+                  {column.label}
+                </span>
+                <span className="grid min-w-5 place-items-center rounded-md bg-surface px-1.5 py-0.5 text-[11px] text-ink/60 tabular-nums">
+                  {column.cards.length}
+                </span>
               </h2>
 
               <div className="flex flex-col gap-2 p-2">
@@ -364,33 +388,51 @@ export function TaskBoard() {
                       data-card={task.id}
                       onPointerDown={(event) => startDrag(event, task)}
                       className={cn(
-                        "rounded-md border border-hairline bg-surface p-3",
+                        "rounded-lg border border-hairline bg-surface p-3",
                         canMove(task) && "cursor-grab select-none",
                         dragging === task.id && "opacity-60 shadow-float",
                       )}
                     >
-                      <p className="text-[13px] text-ink">{task.title}</p>
-                      <p className="mt-1 text-[11.5px] text-ink/50">
-                        {nameOf(task.assigneeMembershipId)} · due {task.dueAt}
-                        {overdue(task, SAMPLE_NOW) ? " · overdue" : ""}
+                      <div className="flex items-start gap-2">
+                        <p className="min-w-0 flex-1 text-[13px] text-ink leading-snug">
+                          {task.title}
+                        </p>
+                        <PriorityChip priority={priorityOf(task)} />
+                      </div>
+
+                      <p className="mt-1.5 text-[11.5px] text-ink/55 leading-[1.5]">
+                        {nameOf(task.assigneeMembershipId)}
+                        <span className="text-ink/25"> · </span>
+                        <span className="tabular-nums">
+                          due {shortDate(task.dueAt)}
+                        </span>
+                        {overdue(task, SAMPLE_NOW) ? (
+                          <>
+                            <span className="text-ink/25"> · </span>
+                            <span className="font-medium text-destructive">
+                              overdue
+                            </span>
+                          </>
+                        ) : null}
                       </p>
+
                       {task.completionNote ? (
-                        <p className="mt-1 text-[11.5px] text-ink/60">
+                        <p className="mt-2 rounded-md bg-surface-muted px-2 py-1.5 text-[11.5px] text-ink/65">
                           {task.completionNote}
                         </p>
                       ) : null}
                       {problem ? (
-                        <p className="mt-1 text-[11.5px] text-warning">
+                        <p className="mt-2 text-[11.5px] text-warning">
                           {problem}
                         </p>
                       ) : null}
 
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-hairline border-t pt-2.5">
                         <Link
                           href={`/dashboard/reports/${task.reportId}`}
-                          className="min-h-9 rounded-md px-2 text-[11.5px] text-ink/60 leading-[2.25] hover:bg-surface-muted"
+                          className="inline-flex min-h-9 items-center justify-center rounded-md bg-brand px-2.5 text-[11.5px] font-medium text-surface hover:bg-brand-hover"
                         >
-                          Its Report
+                          Show report
                         </Link>
                         <MoveMenu
                           task={task}
@@ -407,7 +449,7 @@ export function TaskBoard() {
                 })}
 
                 {column.cards.length === 0 ? (
-                  <p className="px-2 py-4 text-center text-[12.5px] text-ink/50">
+                  <p className="grid min-h-[132px] place-items-center rounded-lg border border-hairline border-dashed px-2 text-center text-[12px] text-ink/45">
                     Nothing here.
                   </p>
                 ) : null}
@@ -448,6 +490,35 @@ export function TaskBoard() {
         </DialogContent>
       </Dialog>
     </DataPage>
+  );
+}
+
+/** Solid tags: blue for Medium as asked, amber for High, red for Critical. */
+const PRIORITY_TONE_CLASS = {
+  neutral: "bg-surface-muted text-ink/70",
+  info: "bg-info text-surface",
+  warning: "bg-sun text-ink dark:text-white",
+  danger: "bg-destructive text-surface",
+} as const;
+
+function shortDate(date: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(`${date}T00:00:00Z`));
+}
+
+function PriorityChip({ priority }: { priority: Priority }) {
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-sm px-1.5 py-0.5 font-medium text-[10.5px]",
+        PRIORITY_TONE_CLASS[PRIORITY_TONE[priority]],
+      )}
+    >
+      {PRIORITY_LABEL[priority]}
+    </span>
   );
 }
 

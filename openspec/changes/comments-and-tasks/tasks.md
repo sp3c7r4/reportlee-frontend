@@ -99,3 +99,16 @@ Three faults, all in the hit test:
 
 Measured after the fix, as Staff at 1440: hovering its own column shows no highlight, hovering Doing shows it,
 and a release there writes `task_1` as `doing` with "Moved to Doing."
+
+## Priority and the board's look, 2026-10-26
+
+- A task now carries `priority: low | medium | high | critical`, chosen where the task is raised, shown as a
+  solid tag, and used to order a column critical first. A task saved before the field existed reads as Medium
+  rather than vanishing.
+- Lane labels sit in their own filled chips: To do in ink, Doing in the bright `--sun` yellow (`#f5c518` light,
+  `#a16207` dark), Done in success. Each lane is a muted ground with cards on the surface colour.
+- The card lost its shadow, gained 8px of breathing room above it in the lane, and its meta line reads as one
+  sentence with the due date in short form.
+- Show report is the brand orange, centred with `inline-flex`, at the same height as the Move to controls.
+- A filled tag's text follows the ground: dark ink on bright yellow in light, white on the deeper amber in dark,
+  so both themes clear 4.5:1.

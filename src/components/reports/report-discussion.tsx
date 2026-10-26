@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CO_LEAGUE_ROSTER } from "@/data/members";
 import type { Comment, Report } from "@/data/reports";
-import type { Task } from "@/data/tasks";
+import type { Priority, Task } from "@/data/tasks";
 import type { DiscussionViewer } from "@/lib/discussion";
 import { canComment, followUpProblem, threadsFor } from "@/lib/discussion";
 
@@ -194,6 +194,7 @@ function RaiseTask({
   const [title, setTitle] = useState(comment.body.slice(0, 80));
   const [assignee, setAssignee] = useState(report.authorMembershipId);
   const [dueAt, setDueAt] = useState("");
+  const [priority, setPriority] = useState<Priority>("medium");
   const [problem, setProblem] = useState<string | null>(null);
 
   return (
@@ -243,6 +244,24 @@ function RaiseTask({
         </select>
       </label>
 
+      <label
+        className="mt-2 block text-[12px] text-ink/60"
+        htmlFor="task-priority"
+      >
+        Priority
+        <select
+          id="task-priority"
+          value={priority}
+          onChange={(event) => setPriority(event.target.value as Priority)}
+          className="mt-1 min-h-11 w-full rounded-md border border-transparent bg-surface-muted px-3 text-[13px] text-ink outline-none focus-visible:border-ink/30"
+        >
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="critical">Critical</option>
+        </select>
+      </label>
+
       <label className="mt-2 block text-[12px] text-ink/60" htmlFor="task-due">
         Due date
         <input
@@ -280,6 +299,7 @@ function RaiseTask({
               assigneeMembershipId: assignee,
               assignedByMembershipId: viewer.membershipId,
               dueAt,
+              priority,
               status: "todo",
               completionNote: null,
               completionFile: null,
