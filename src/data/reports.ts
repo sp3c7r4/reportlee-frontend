@@ -297,7 +297,7 @@ export const SAMPLE_REPORTS: Report[] = [
   {
     ...baseReport,
     id: "rpt_head_submitted",
-    authorMembershipId: "mem_head",
+    authorMembershipId: "mem_head_platform",
     accomplishments: "<p>Reconciled the depot counts and closed the month.</p>",
     submissionStatus: "submitted",
     reviewStatus: "pending",
@@ -306,7 +306,7 @@ export const SAMPLE_REPORTS: Report[] = [
     windowStartedAt: null,
     updatedAt: at(-240),
     events: [
-      { kind: "submitted", at: at(-240), actorMembershipId: "mem_head" },
+      { kind: "submitted", at: at(-240), actorMembershipId: "mem_head_platform" },
     ],
   },
   {

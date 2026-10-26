@@ -14,6 +14,7 @@ OpenSpec changes under `openspec/changes/`; there is no other spec location.
 | 2026-10-26 | Notification bell: the supplied artwork, two-tone, with a red unread count capped at 99+ and a tested badge rule | `tsc` + `npm test` 58/58 + build + browser |
 | 2026-10-26 | Shared records: the `Comment` shape with a decision kind, the audit log, the event stream with one review scope, and the plan gate with one retention rule | `tsc` + `npm test` 76/76 + build + browser |
 | 2026-10-26 | People and setup, part 1: the members table with invitations and seats, invite rules per role, the guards with their reasons, the Spaces cards with archive, and the Admin-only setup banner | `tsc` + `npm test` 86/86 + build + browser |
+| 2026-10-26 | UI-8 review queue: scoped tabs, decision dialogs with required reasons, bulk approve and the not-submitted list | `tsc` + `npm test` 107/107 + build + browser |
 | 2026-10-26 | Status vocabulary (`src/lib/status.ts`) with seven states, tones and per-state icons, plus the theme cookie renamed `reportlee-theme` and scoped to `*.reportlee.app` | `tsc` + `npm test` 15/15 + build + browser |
 | 2026-10-26 | Three roles on the landing page: Staff, Head of Space, Workspace Admin, with Admins shown as monitors who never author | `tsc` + build + browser |
 | 2026-10-26 | Department renamed to Space in code, copy and file names: `space-step.tsx`, `SPACE_LIMIT`, `?step=spaces` | `tsc` + build + browser |

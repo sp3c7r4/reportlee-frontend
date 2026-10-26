@@ -35,3 +35,35 @@
       returns 409.
 - [ ] 5.4 Read-only Workspace removes the decision controls with the reason; a posted decision is refused.
 - [ ] 5.5 A reason is stored as a `decision` comment through the shared shape.
+
+## Validation, step 1
+
+Run on 2026-10-26 from `reportlee-frontend-new`.
+
+| Step | Command | Result |
+|---|---|---|
+| Types | `npx tsc --noEmit` | clean |
+| Tests | `npm test` | 107 pass, 0 fail (was 94) |
+| Red first | `scripts/review.test.ts` before `src/lib/review.ts` | `ERR_MODULE_NOT_FOUND`, then two failing assertions that exposed missing sample data, fixed by building the cases in the test |
+| Build | `npm run build` | compiled in 5.0s, 21/21 pages, `/dashboard/review` added |
+| Lint | `npx biome check` on the touched files | clean |
+| Specs | `npx openspec validate --all --strict` | 11 passed, 0 failed |
+
+Browser, dark, Admin in Kano Programme Office, 1440:
+
+- Tabs read Pending (5), Approved (1), Rejected (1), Not submitted (5) on first load.
+- Approving moved Pending 4 to 3 and Approved 1 to 2, with "was notified: their Report is approved".
+- Requesting changes with an empty reason was refused with "Give a reason. The author reads it as the reason for the change."; with a reason it moved the Report out of Pending and asked 4 to 3, notice "was notified and can edit their Report".
+- Not submitted lists Tunde Adeyemi, Zainab Yusuf, Emeka Nwosu and Halima Sani, never an Admin, and a draft reads "Draft, not sent".
+
+## Rules this shipped
+
+- Scope lives in `queueFor` alone: an Admin sees the Workspace, a Head sees their own Space, Staff see nothing, and nobody sees their own Report.
+- A Report from a Membership this Workspace does not know is not in its queue, which is what keeps another Workspace's sample Report out.
+- A draft counts as missing and never as submitted.
+- A read-only Workspace refuses every decision with a sentence.
+
+## Still open in this change
+
+- Opening a Report still writes no seen clock; `firstSeenAt` and `windowStartedAt` stay the next step.
+- Reopen currently returns the Report to pending but does not restore the author's window, because the window write is the same step.
