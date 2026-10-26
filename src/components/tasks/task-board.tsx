@@ -66,11 +66,15 @@ function loadTasks(): Task[] {
 
 export function TaskBoard() {
   const { membership, workspace } = useShell();
-  const viewer: TaskViewer = {
-    membershipId: membership.id,
-    role: membership.role,
-    space: membership.space,
-  };
+  // Stable identity: a fresh object every render would re-run the effect below forever.
+  const viewer: TaskViewer = useMemo(
+    () => ({
+      membershipId: membership.id,
+      role: membership.role,
+      space: membership.space,
+    }),
+    [membership.id, membership.role, membership.space],
+  );
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [view, setView] = useState<View>(() => viewsFor(viewer)[0] ?? "mine");
