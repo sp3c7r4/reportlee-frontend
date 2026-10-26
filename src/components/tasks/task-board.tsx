@@ -129,7 +129,14 @@ export function TaskBoard() {
     });
 
     setDragging(task.id);
-    gsap.set(card, { zIndex: 40, scale: 1.02, rotate: 1.2 });
+    // The card sits under the cursor while it moves, so it must not answer the hit
+    // test, or the column it came from is the only one ever found.
+    gsap.set(card, {
+      zIndex: 40,
+      scale: 1.02,
+      rotate: 1.2,
+      pointerEvents: "none",
+    });
     card.style.cursor = "grabbing";
     // Window listeners, so the card keeps following even when the pointer leaves it.
     try {
@@ -145,8 +152,10 @@ export function TaskBoard() {
         .elementFromPoint(next.clientX, next.clientY)
         ?.closest<HTMLElement>("[data-column]");
       const column = (under?.dataset.column as TaskStatus | undefined) ?? null;
-      target = column;
-      setOverColumn(column);
+      // Its own column is not a target: highlighting it reads as a refusal.
+      const nextTarget = column && column !== task.status ? column : null;
+      target = nextTarget;
+      setOverColumn(nextTarget);
     };
 
     const end = (next: PointerEvent) => {
@@ -167,6 +176,7 @@ export function TaskBoard() {
         scale: 1,
         rotate: 0,
         zIndex: 0,
+        pointerEvents: "auto",
         duration: 0.22,
         ease: "power2.out",
       });

@@ -84,3 +84,18 @@ settle.
 
 - Drag has no touch story: on a phone the Move to menu is the only way to move a card, which the spec already requires.
 - The board reads and writes one device-local key (`reportlee.tasks`), and the Report page reads the same key, so a task raised on a Report appears on the board only after a reload of that page list.
+
+### Why the highlight flickered, 2026-10-26
+
+Three faults, all in the hit test:
+
+- The dragged card travelled under the cursor and answered `elementFromPoint`, so the column under the pointer
+  was always the one the card came from. Its own column lit up, the card caught up, the pointer moved, and the
+  highlight flickered between columns. The card is now `pointer-events: none` while it is lifted.
+- The card's own column was treated as a valid target, which reads as a refusal. It is now never a target and
+  never highlighted.
+- A leftover completion dialog covered the board, and because it is a modal it blocked every hit test under it,
+  so nothing highlighted and nothing dropped. Closing it restored the board.
+
+Measured after the fix, as Staff at 1440: hovering its own column shows no highlight, hovering Doing shows it,
+and a release there writes `task_1` as `doing` with "Moved to Doing."
