@@ -387,6 +387,22 @@ export const SAMPLE_REPORTS: Report[] = [
         at: at(-3_000),
         kind: "decision",
       },
+      {
+        id: "cmt_thread_open",
+        reportId: "rpt_rejected",
+        authorMembershipId: "mem_head_platform",
+        body: "Which Space owns the schedule now that Platform handed it over?",
+        at: at(-2_900),
+        kind: "comment",
+      },
+      {
+        id: "cmt_thread_reply",
+        reportId: "rpt_rejected",
+        authorMembershipId: "mem_staff",
+        body: "Platform still does. I will name it in the next Report.",
+        at: at(-2_800),
+        kind: "comment",
+      },
     ],
   },
   {

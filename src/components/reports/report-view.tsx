@@ -38,9 +38,13 @@ import {
   loadReports,
   putHandoff,
   readDraft,
+  SAVED_PREFIX,
+  savedReports,
 } from "@/lib/reports";
 import { SUBMISSION_STATUS } from "@/lib/status";
 import { cn } from "@/lib/utils";
+import { SAMPLE_TASKS, type Task } from "@/data/tasks";
+import { ReportDiscussion } from "./report-discussion";
 import { ReportTimeline, StatePill } from "./report-timeline";
 
 /* @info - Reading a Report writes nothing, reviewers included: seen belongs to review.
@@ -72,6 +76,26 @@ export function ReportView({ reportId }: { reportId: string }) {
     "loading",
   );
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
+
+  /* @info - Comments and tasks live on this device until the server owns them. */
+  const persistReport = async (next: Report) => {
+    const saved = savedReports(window.localStorage, membership.id);
+    window.localStorage.setItem(
+      `${SAVED_PREFIX}.${membership.id}`,
+      JSON.stringify({ ...saved, [next.id]: next }),
+    );
+  };
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("reportlee.tasks");
+      setTasks(raw ? (JSON.parse(raw) as Task[]) : SAMPLE_TASKS);
+    } catch {
+      setTasks(SAMPLE_TASKS);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setState("loading");
@@ -268,6 +292,12 @@ export function ReportView({ reportId }: { reportId: string }) {
             <p className="mt-3 text-[13px] text-ink/60">{action.reason}</p>
           ) : null}
 
+          {notice ? (
+            <p className="mt-3 rounded-md border border-hairline bg-surface-muted px-3 py-2 text-[12.5px] text-ink">
+              {notice}
+            </p>
+          ) : null}
+
           <div className="mt-5">
             <article className="flex min-w-0 flex-col gap-5">
               {(
@@ -328,6 +358,32 @@ export function ReportView({ reportId }: { reportId: string }) {
                 </section>
               ) : null}
             </article>
+
+            <ReportDiscussion
+              report={report}
+              viewer={{
+                membershipId: membership.id,
+                role: membership.role,
+                space: membership.space,
+              }}
+              readOnly={workspace.readOnly}
+              now={new Date().toISOString()}
+              tasks={tasks}
+              onComment={(comment) => {
+                const next = {
+                  ...report,
+                  comments: [...report.comments, comment],
+                };
+                setReport(next);
+                void persistReport(next);
+              }}
+              onCreateTask={(task) => {
+                setTasks((current) => [...current, task]);
+                setNotice(
+                  `${task.title} is on the board, assigned to whoever was chosen.`,
+                );
+              }}
+            />
           </div>
         </div>
 

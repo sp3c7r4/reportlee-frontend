@@ -26,7 +26,8 @@ export type AuditAction =
   | "ai.toggle"
   | "export"
   | "report.deleted"
-  | "draft.requested";
+  | "draft.requested"
+  | "task.moved";
 
 export type AuditEntry = {
   at: string;

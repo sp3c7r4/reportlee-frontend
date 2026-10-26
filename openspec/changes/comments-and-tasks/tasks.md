@@ -40,3 +40,33 @@
 - [ ] 5.7 Read-only Workspace blocks comments and moves with the reason.
 - [ ] 5.8 Deactivated assignee flagged with Reassign for an Admin.
 - [ ] 5.9 Comment attachments as metadata, and "links are always text" replaces the old composer line.
+
+## Validation, step 1
+
+Run on 2026-10-26 from `reportlee-frontend-new`.
+
+| Step | Command | Result |
+|---|---|---|
+| Types | `npx tsc --noEmit` | clean |
+| Tests | `npm test` | 132 pass, 0 fail (was 107) |
+| Red first | `scripts/tasks.test.ts` and `scripts/discussion.test.ts` before their modules | `ERR_MODULE_NOT_FOUND`, then real assertion failures on a message and on the sample data |
+| Build | `npm run build` | compiled in 5.9s, 22/22 pages, `/dashboard/tasks` added |
+| Lint | `npx biome check` on the touched files | clean |
+| Motion | no framer module in either tree | none |
+
+Browser, dark, 1440:
+
+- Admin on `/dashboard/tasks` sees Assigned by me and Everyone and is never offered Assigned to me; a card in someone else's hands cannot be dragged and its Move to buttons are disabled with a reason.
+- Staff in Arthurite sees Assigned to me with three cards, Move to on each, and "Show 1 older (Done keeps 14 days)".
+- Drag from Doing to To do: the target column highlights, the card lands there, the counts go To do 1, Doing 0, and the notice reads "Moved to To do."
+- Drag into Done opens the completion dialog; a note typed there is kept and shown on the card.
+- On `rpt_rejected` the Discussion section shows the reviewer's thread with the author's reply, a composer and "2 follow-up tasks on this Report".
+
+## Drag and drop, 2026-10-26
+
+Cards are native drag sources, enabled only where the move is allowed, so a card never lifts and then refuses. GSAP does the lift, the drop target highlight and the settle, all inside `MOTION_OK`, so a reduced motion visitor gets no animation and the same move.
+
+## Still open in this change
+
+- Drag has no touch story: on a phone the Move to menu is the only way to move a card, which the spec already requires.
+- The board reads and writes one device-local key (`reportlee.tasks`), and the Report page reads the same key, so a task raised on a Report appears on the board only after a reload of that page list.
