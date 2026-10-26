@@ -106,10 +106,11 @@ export function Sidebar() {
 }
 
 /**
- * Search is a shell until UI-12. The shortcut hint names the platform's own modifier,
- * because a Mac user reading Ctrl K learns the wrong habit on the first day.
+ * Search opens the overlay with Ctrl K or Cmd K. The hint names the platform's own
+ * modifier, because a Mac user reading Ctrl K learns the wrong habit on the first day.
  */
 function SearchField({ collapsed }: { collapsed: boolean }) {
+  const { openSearch } = useShell();
   const [modifier, setModifier] = useState("Ctrl");
 
   useEffect(() => {
@@ -132,8 +133,8 @@ function SearchField({ collapsed }: { collapsed: boolean }) {
             render={
               <button
                 type="button"
-                disabled
-                aria-label={`Search, not available yet. Shortcut ${hint}`}
+                onClick={openSearch}
+                aria-label={`Search. Shortcut ${hint}`}
                 className="grid size-10 place-items-center rounded-xl border border-hairline bg-surface text-ink/60"
               />
             }
@@ -153,9 +154,9 @@ function SearchField({ collapsed }: { collapsed: boolean }) {
   return (
     <button
       type="button"
-      disabled
-      aria-label={`Search, not available yet. Shortcut ${hint}`}
-      className="flex min-h-11 w-full items-center gap-2.5 rounded-xl border border-hairline bg-surface px-3 py-1.5 text-[13px] text-ink/60"
+      onClick={openSearch}
+      aria-label={`Search. Shortcut ${hint}`}
+      className="flex min-h-11 w-full items-center gap-2.5 rounded-xl border border-hairline bg-surface px-3 py-1.5 text-[13px] text-ink/60 hover:bg-surface-muted"
     >
       <HugeiconsIcon icon={Search01Icon} strokeWidth={1.8} className="size-4" />
       <span className="flex-1 text-left">Search</span>

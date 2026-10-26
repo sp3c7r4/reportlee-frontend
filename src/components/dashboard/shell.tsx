@@ -13,6 +13,7 @@ import { readSession } from "@/lib/session";
 import { sidebarCookie, type Theme, themeCookie } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { ShellDrawer } from "./drawer";
+import { SearchOverlay } from "@/components/search/search-panel";
 import { SetupBanner } from "./setup-banner";
 import { ShellContext, type ShellContextValue } from "./shell-context";
 import { Sidebar } from "./sidebar";
@@ -53,6 +54,7 @@ export function DashboardShell({
   const [theme, setThemeState] = useState<Theme>(initialTheme);
   const [collapsed, setCollapsed] = useState(initialCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(
     null,
   );
@@ -94,6 +96,17 @@ export function DashboardShell({
     writeCookie(sidebarCookie(next));
   }
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen((current) => !current);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const value: ShellContextValue = {
     user,
     membership,
@@ -110,6 +123,9 @@ export function DashboardShell({
     toggleCollapsed,
     openDrawer: () => setDrawerOpen(true),
     closeDrawer: () => setDrawerOpen(false),
+    openSearch: () => setSearchOpen(true),
+    closeSearch: () => setSearchOpen(false),
+    searchOpen,
   };
 
   return (
@@ -160,6 +176,7 @@ export function DashboardShell({
         <TabBar />
 
         <ShellDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
+        <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
       </div>
     </ShellContext.Provider>
   );

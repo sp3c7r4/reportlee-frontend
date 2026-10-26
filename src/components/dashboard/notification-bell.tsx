@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { SAMPLE_NOTIFICATIONS } from "@/data/notifications";
 import { badgeLabel, unreadCount } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
@@ -19,10 +21,9 @@ export function NotificationBell({ className }: { className?: string }) {
   const label = badgeLabel(unread);
 
   return (
-    <button
-      type="button"
-      disabled
-      title="Notifications arrive with UI-11"
+    <Link
+      href="/dashboard/notifications"
+      title="Notifications"
       aria-label={
         unread > 0
           ? `Notifications, ${unread} unread`
@@ -69,6 +70,6 @@ export function NotificationBell({ className }: { className?: string }) {
           {label}
         </span>
       ) : null}
-    </button>
+    </Link>
   );
 }

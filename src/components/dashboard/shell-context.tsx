@@ -25,6 +25,10 @@ export type ShellContextValue = {
   actionSlot: HTMLElement | null;
   theme: Theme;
   setTheme: (theme: Theme) => void;
+  /** The Ctrl K search overlay, opened from the rail or the shortcut. */
+  openSearch: () => void;
+  searchOpen: boolean;
+  closeSearch: () => void;
   /** The rail is collapsed on desktop only. The drawer is always expanded. */
   collapsed: boolean;
   toggleCollapsed: () => void;

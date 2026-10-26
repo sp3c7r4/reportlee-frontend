@@ -84,6 +84,25 @@ Reopen clears `windowStartedAt` so the next look starts a fresh window while `fi
 expectations in `scripts/report-view.test.ts` pin it, and the browser shows First seen, Locks 30 minutes later and
 a "Seen by reviewer" timeline entry on `rpt_unseen`.
 
+## Notifications, search and analytics, 2026-10-26
+
+- Notifications at `/dashboard/notifications`: grouped by day in the Workspace's zone, unread counted, Mark all
+  read, and a Preferences page at `/dashboard/account/notifications` where invitations and security have no
+  switch. The bell is now a link, not a disabled control.
+- Search: one `search()` decides scope for both the Ctrl K overlay and `/dashboard/search`, so they cannot
+  disagree. An author finds their own draft labelled Draft; nobody else finds a draft. At most five per group,
+  with a see-all link from the overlay. Recent searches are per Membership, cleared at sign out.
+- Analytics at `/dashboard/analytics` and `/dashboard/my-record`: four cards, a small-sample warning below five
+  Reports, KPI rows reading "N of M Reports included it", people grouped by state and never ranked, and a table
+  view that is a real alternative, not a fallback.
+- The overlay scrim matches the dialog primitive (black 80% plus a soft blur), because the old ink tint turned
+  the page near-white in the dark theme.
+
+Evidence: `tsc` clean, `npm test` 166 pass 0 fail, build 27/27 pages, biome clean, no em dashes. Browser: overlay
+opens on Ctrl K and finds by name; notifications read "3 unread" across three days; analytics shows 50% on-time,
+3 missing, 15.3 h to decision, with the small-sample banner and a seven-row table.
+
 ## Still open in this change
 
-- Notifications, search and analytics.
+- Charts: the four cards and the table view are the figures. No SVG trend chart is drawn yet, because a chart
+  without a period comparison would be decoration.
