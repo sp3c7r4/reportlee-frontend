@@ -32,6 +32,7 @@ test("each role's sidebar is exactly its own list, in order", () => {
     ]),
     [
       ["Work", ["Home", "My reports", "Tasks"]],
+      ["People", ["Leads"]],
       ["Insight", ["My record"]],
     ],
   );
@@ -55,7 +56,7 @@ test("each role's sidebar is exactly its own list, in order", () => {
     [
       ["Work", ["Overview", "Tasks"]],
       ["Review", ["Review"]],
-      ["People", ["Spaces", "Members"]],
+      ["People", ["Spaces", "Members", "Leads"]],
       ["Insight", ["Analytics", "Assistant"]],
       ["Manage", ["Settings"]],
     ],

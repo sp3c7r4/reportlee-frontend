@@ -12,6 +12,7 @@ import {
   SparklesIcon,
   Task01Icon,
   UserGroupIcon,
+  UserMultipleIcon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
@@ -77,6 +78,12 @@ const NAV: Record<Role, Nav> = {
           HOME_STAFF,
           { label: "My reports", href: "/dashboard/reports", icon: File01Icon },
           { label: "Tasks", href: "/dashboard/tasks", icon: Task01Icon },
+        ],
+      },
+      {
+        label: "People",
+        items: [
+          { label: "Leads", href: "/dashboard/leads", icon: UserMultipleIcon },
         ],
       },
       {
@@ -171,6 +178,7 @@ const NAV: Record<Role, Nav> = {
         items: [
           { label: "Spaces", href: "/dashboard/spaces", icon: Grid02Icon },
           { label: "Members", href: "/dashboard/members", icon: UserGroupIcon },
+          { label: "Leads", href: "/dashboard/leads", icon: UserMultipleIcon },
         ],
       },
       {
