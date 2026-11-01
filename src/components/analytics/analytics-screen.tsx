@@ -8,6 +8,8 @@ import { SAMPLE_PERIOD, SAMPLE_REPORTS } from "@/data/reports";
 import { analyticsFor } from "@/lib/analytics";
 import { savedReports } from "@/lib/reports";
 import { cn } from "@/lib/utils";
+import { KpiCoverageChart } from "./kpi-coverage-chart";
+import { SubmissionChart } from "./submission-chart";
 
 /**
  * Analytics for one period and one scope. Every figure names what it counted, a small
@@ -118,6 +120,9 @@ export function AnalyticsScreen({ scope }: { scope: "workspace" | "me" }) {
             ))}
           </dl>
 
+          <SubmissionChart view={view} />
+          <KpiCoverageChart view={view} />
+
           {showTable ? (
             <div className="mt-4 overflow-hidden rounded-lg border border-hairline">
               <table className="w-full text-left text-[12.5px]">
@@ -152,25 +157,6 @@ export function AnalyticsScreen({ scope }: { scope: "workspace" | "me" }) {
                 </tbody>
               </table>
             </div>
-          ) : null}
-
-          {view.kpis.length > 0 ? (
-            <section className="mt-6">
-              <h2 className="font-medium text-[14px] text-ink">KPI coverage</h2>
-              <ul className="mt-2 flex list-none flex-col gap-1.5 p-0">
-                {view.kpis.map((kpi) => (
-                  <li
-                    key={kpi.name}
-                    className="flex items-center justify-between gap-3 rounded-md border border-hairline px-3 py-2 text-[13px]"
-                  >
-                    <span className="text-ink">{kpi.name}</span>
-                    <span className="text-ink/60 tabular-nums">
-                      {kpi.included} of {kpi.total} Reports included it
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
           ) : null}
 
           {view.groups.length > 0 ? (
