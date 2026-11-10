@@ -16,8 +16,11 @@ export function Wordmark({ className }: WordmarkProps) {
   return (
     <span
       className={cn(
-        "inline-block font-bold leading-none tracking-[-0.035em] whitespace-nowrap",
+        "inline-block font-bold tracking-[-0.035em] whitespace-nowrap",
         className,
+        // Last, so the merger keeps it: a size utility is read as carrying a line height,
+        // and dropping this would leave the wordmark in a 1.43 line box inside its row.
+        "leading-none",
       )}
     >
       Reportlee

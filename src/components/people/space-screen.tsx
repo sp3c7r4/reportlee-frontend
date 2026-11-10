@@ -1,6 +1,6 @@
 "use client";
 
-import { PlusSignIcon, Delete02Icon } from "@hugeicons/core-free-icons";
+import { Delete02Icon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { use, useMemo, useState } from "react";
@@ -19,6 +19,7 @@ import { recordAudit } from "@/lib/audit";
 import {
   applyTemplate,
   canEditTemplate,
+  mySpace,
   reportsInSpace,
   spaceById,
   spaceStats,
@@ -381,4 +382,29 @@ function TemplateEditor({
 export function SpaceRoute({ params }: { params: Promise<{ id: string }> }) {
   const resolved = use(params);
   return <SpaceScreen id={resolved.id} />;
+}
+
+/**
+ * "My Space" for a Head: the Space they head, else the one on their Membership. The
+ * drawer links here, so the destination resolves the person's own Space rather than a
+ * fixed id.
+ */
+export function MySpaceScreen() {
+  const { membership } = useShell();
+  const space = mySpace(SPACES, membership);
+
+  if (!space) {
+    return (
+      <DataPage>
+        <h1 className="font-bold text-[24px] text-ink tracking-[-0.03em]">
+          No Space yet
+        </h1>
+        <p className="mt-2 text-[13px] text-ink/60">
+          This Membership is not in a Space, so there is nothing to show.
+        </p>
+      </DataPage>
+    );
+  }
+
+  return <SpaceScreen id={space.id} />;
 }

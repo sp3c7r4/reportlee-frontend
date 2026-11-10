@@ -22,6 +22,21 @@ export function spaceById(
   return spaces.find((space) => space.id === id) ?? null;
 }
 
+/**
+ * The Space a person means by "my Space": the one they head, else the one they belong
+ * to by name, else null.
+ */
+export function mySpace(
+  spaces: SpaceSummary[],
+  membership: { id: string; space: string | null },
+): SpaceSummary | null {
+  return (
+    spaces.find((space) => space.headMembershipId === membership.id) ??
+    spaces.find((space) => space.name === membership.space) ??
+    null
+  );
+}
+
 export function reportsInSpace(
   reports: Report[],
   roster: RosterMember[],

@@ -5,6 +5,7 @@ import { SAMPLE_REPORTS } from "../src/data/reports.ts";
 import {
   applyTemplate,
   canEditTemplate,
+  mySpace,
   reportsInSpace,
   spaceById,
   spaceStats,
@@ -39,6 +40,20 @@ const staff = {
 test("an unknown Space is not found", () => {
   assert.equal(spaceById(SPACES, "sp_nowhere"), null);
   assert.equal(spaceById(SPACES, "sp_platform")?.name, "Platform");
+});
+
+/* @info - "My Space" is the Space the person heads, then the one on their Membership; a
+   Membership that is in neither gets null rather than someone else's Space. */
+test("my Space is the one headed, else the one joined", () => {
+  assert.equal(
+    mySpace(SPACES, { id: head.membershipId, space: head.space })?.id,
+    "sp_platform",
+  );
+  assert.equal(
+    mySpace(SPACES, { id: "mem_tunde", space: "Field Operations" })?.id,
+    "sp_field",
+  );
+  assert.equal(mySpace(SPACES, { id: "mem_x", space: "Logistics" }), null);
 });
 
 test("a Space's Reports are those written by its people", () => {

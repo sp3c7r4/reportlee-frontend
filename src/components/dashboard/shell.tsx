@@ -17,7 +17,6 @@ import { ShellDrawer } from "./drawer";
 import { SetupBanner } from "./setup-banner";
 import { ShellContext, type ShellContextValue } from "./shell-context";
 import { Sidebar } from "./sidebar";
-import { TabBar } from "./tab-bar";
 import { TopBar } from "./top-bar";
 
 type DashboardShellProps = {
@@ -163,17 +162,11 @@ export function DashboardShell({
             <SetupBanner />
 
             <TopBar />
-            <main
-              id="main"
-              tabIndex={-1}
-              className="min-w-0 flex-1 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0"
-            >
+            <main id="main" tabIndex={-1} className="min-w-0 flex-1">
               {children}
             </main>
           </div>
         </div>
-
-        <TabBar />
 
         <ShellDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
         <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />

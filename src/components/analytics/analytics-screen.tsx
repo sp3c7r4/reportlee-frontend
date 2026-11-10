@@ -16,7 +16,7 @@ import { SubmissionChart } from "./submission-chart";
  * sample says so, and the table view is a first-class way to read the same numbers.
  */
 export function AnalyticsScreen({ scope }: { scope: "workspace" | "me" }) {
-  const { membership, workspace, user } = useShell();
+  const { membership } = useShell();
   const [showTable, setShowTable] = useState(false);
 
   const viewer = useMemo(
@@ -60,15 +60,6 @@ export function AnalyticsScreen({ scope }: { scope: "workspace" | "me" }) {
           <h1 className="font-bold text-[24px] text-ink tracking-[-0.03em]">
             {heading}
           </h1>
-          <p className="mt-1 text-[13px] text-ink/60">
-            {SAMPLE_PERIOD.label} ·{" "}
-            {view.scope === "workspace"
-              ? "the whole Workspace"
-              : view.scope === "space"
-                ? `the ${view.spaceFilter} Space`
-                : user.name}{" "}
-            · times in {workspace.timeZone}
-          </p>
         </div>
         <button
           type="button"
@@ -89,14 +80,6 @@ export function AnalyticsScreen({ scope }: { scope: "workspace" | "me" }) {
         <div className="mt-4 h-24 animate-pulse rounded-lg bg-surface-muted" />
       ) : (
         <>
-          {view.smallSample ? (
-            <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-[12.5px] text-warning">
-              Small sample: {view.coverage.submitted} of{" "}
-              {view.coverage.expected} Reports. Figures below five are shown,
-              not trusted.
-            </p>
-          ) : null}
-
           {view.lockedReason ? (
             <p className="mt-3 text-[12.5px] text-ink/55">
               {view.lockedReason}

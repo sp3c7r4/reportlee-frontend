@@ -1,14 +1,22 @@
+"use client";
+
+import {
+  Bar,
+  BarChart,
+  LabelList,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import type { AnalyticsView } from "@/lib/analytics";
-import { barWidth } from "@/lib/chart-geometry";
 
 /**
- * KPI coverage as one horizontal bar per KPI, included of total, read from view.kpis so a
- * bar and its table row cannot disagree. Each bar is labelled with the KPI name and reads
- * "N of M", so a KPI nobody filled in reads as that, not a zero, and colour is never the
- * only encoding. When there are no KPIs the area says so in words.
+ * KPI coverage as one Recharts horizontal bar per KPI, included of total, read from
+ * view.kpis so a bar and its table row cannot disagree. Each bar is labelled "N of M", so a
+ * KPI nobody filled in reads as that, not a zero, and colour is never the only encoding.
+ * When there are no KPIs the area says so in words.
  */
-
-const TRACK = 100;
 
 export function KpiCoverageChart({ view }: { view: AnalyticsView }) {
   if (view.kpis.length === 0) {
@@ -22,47 +30,73 @@ export function KpiCoverageChart({ view }: { view: AnalyticsView }) {
     );
   }
 
+  const data = view.kpis.map((kpi) => ({
+    name: kpi.name,
+    included: kpi.included,
+    label: `${kpi.included} of ${kpi.total}`,
+  }));
+  const widest = Math.max(1, ...view.kpis.map((kpi) => kpi.total));
+
   return (
     <section className="mt-6">
       <h2 className="font-medium text-[14px] text-ink">KPI coverage</h2>
-      <ul className="mt-2 flex list-none flex-col gap-2.5 p-0">
-        {view.kpis.map((kpi) => {
-          const width = barWidth(kpi.included, kpi.total, TRACK);
-          const label = `${kpi.name}: ${kpi.included} of ${kpi.total} Reports included it`;
-          return (
-            <li key={kpi.name} className="text-[12.5px]">
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-ink">{kpi.name}</span>
-                <span className="text-ink/60 tabular-nums">
-                  {kpi.included} of {kpi.total}
-                </span>
-              </div>
-              <svg
-                viewBox={`0 0 ${TRACK} 8`}
-                preserveAspectRatio="none"
-                role="img"
-                aria-label={label}
-                className="mt-1 h-2.5 w-full overflow-hidden rounded-full border border-hairline"
-              >
-                <rect
-                  x={0}
-                  y={0}
-                  width={TRACK}
-                  height={8}
-                  className="fill-surface-muted"
-                />
-                <rect
-                  x={0}
-                  y={0}
-                  width={width}
-                  height={8}
-                  className="fill-brand"
-                />
-              </svg>
-            </li>
-          );
-        })}
-      </ul>
+      <p className="mt-1 text-[12px] text-ink/55">
+        Reports that included each KPI, out of the Reports in scope.
+      </p>
+
+      <div
+        className="mt-2 min-w-0 overflow-hidden"
+        style={{ height: Math.max(120, data.length * 38) }}
+        role="img"
+        aria-label={`KPI coverage: ${data
+          .map((row) => `${row.name} ${row.label}`)
+          .join(", ")}.`}
+      >
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={data}
+            layout="vertical"
+            margin={{ top: 0, right: 48, bottom: 0, left: 0 }}
+            barCategoryGap={10}
+          >
+            <XAxis type="number" domain={[0, widest]} hide />
+            <YAxis
+              type="category"
+              dataKey="name"
+              width={132}
+              tickLine={false}
+              axisLine={false}
+              tick={{ fill: "var(--ink)", fillOpacity: 0.75, fontSize: 11.5 }}
+            />
+            <Tooltip
+              cursor={{ fill: "var(--surface-muted)" }}
+              contentStyle={{
+                background: "var(--surface-alt)",
+                border: "1px solid var(--hairline)",
+                borderRadius: 8,
+                fontSize: 12,
+              }}
+              labelStyle={{ color: "var(--ink)" }}
+              itemStyle={{ color: "var(--ink)" }}
+            />
+            <Bar
+              dataKey="included"
+              name="Reports that included it"
+              fill="var(--brand)"
+              radius={[0, 4, 4, 0]}
+              background={{ fill: "var(--surface-muted)" }}
+            >
+              <LabelList
+                dataKey="label"
+                position="right"
+                fill="var(--ink)"
+                fillOpacity={0.6}
+                fontSize={11}
+              />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </section>
   );
 }

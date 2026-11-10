@@ -11,8 +11,7 @@ import { useShell } from "./shell-context";
 /**
  * Slim by design: breadcrumbs left, the bell and the page's single action right. The
  * action slot is filled by the page through TopBarAction, so the bar never guesses.
- * From md to lg this button is the one Menu control; below md the tab bar owns it,
- * and from lg the rail does.
+ * From lg down this button is the one Menu control; from lg the rail is shown.
  */
 export function TopBar() {
   const { membership, openDrawer, assignActionSlot } = useShell();
@@ -26,7 +25,7 @@ export function TopBar() {
         size="icon-sm"
         onClick={openDrawer}
         aria-label="Open navigation"
-        className="hidden md:inline-flex lg:hidden"
+        className="inline-flex lg:hidden"
       >
         <HugeiconsIcon icon={Menu01Icon} strokeWidth={1.9} className="size-4" />
       </Button>
