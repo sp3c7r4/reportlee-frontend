@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ROLE_LABEL } from "@/data/viewer";
+import { signOut } from "@/lib/auth";
 import { clearReportStateFor } from "@/lib/reports";
 import { clearSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -39,9 +40,10 @@ export function SidebarFooter({ collapsed = false }: { collapsed?: boolean }) {
   const { user, membership, portalContainer, theme, setTheme } = useShell();
   const router = useRouter();
 
-  function signOut() {
+  async function handleSignOut() {
     // A shared device must not hand the next person someone else's draft.
     clearReportStateFor(window.localStorage, membership.id);
+    await signOut();
     clearSession();
     router.replace("/login");
   }
@@ -164,7 +166,10 @@ export function SidebarFooter({ collapsed = false }: { collapsed?: boolean }) {
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem className={rowClass} onClick={signOut}>
+          <DropdownMenuItem
+            className={rowClass}
+            onClick={() => void handleSignOut()}
+          >
             <HugeiconsIcon
               icon={Logout01Icon}
               strokeWidth={1.8}

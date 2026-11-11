@@ -34,7 +34,8 @@ export function LoginForm() {
     event.preventDefault();
 
     const nextErrors: FieldErrors = {};
-    if (!EMAIL_PATTERN.test(email.trim())) nextErrors.email = "Enter a valid email address.";
+    if (!EMAIL_PATTERN.test(email.trim()))
+      nextErrors.email = "Enter a valid email address.";
     if (password.length < MIN_PASSWORD) {
       nextErrors.password = `Passwords are at least ${MIN_PASSWORD} characters.`;
     }
@@ -47,10 +48,15 @@ export function LoginForm() {
     setPending(false);
 
     if (result.ok) {
-      // The real API issues a session cookie; this build has none, so the simulated
-      // session is what tells the frame someone is here.
-      writeSession(email.trim());
+      // The tokens live in memory in `src/lib/tokens.ts`; this record only tells the
+      // frame who signed in, and is never an identity check.
+      writeSession(email.trim(), result.role);
       router.replace("/dashboard");
+      return;
+    }
+    const fields = result.fieldErrors;
+    if (fields?.email || fields?.password) {
+      setErrors({ email: fields.email, password: fields.password });
       return;
     }
     setFormError(result.message);

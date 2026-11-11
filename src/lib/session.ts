@@ -10,6 +10,7 @@
  * guarded so a server component can import this module without touching window.
  */
 
+import type { Role } from "./nav.ts";
 import type { AuthFlow } from "./otp.ts";
 
 export type FlowState = {
@@ -23,6 +24,8 @@ export type FlowState = {
 export type AuthSession = {
   email: string;
   establishedAt: number;
+  /** The mapped role the API answered with. A display hint, never an access check. */
+  role?: Role;
 };
 
 const FLOW_KEY = "iroyin.auth.flow";
@@ -72,8 +75,12 @@ export function readSession(): AuthSession | null {
   return read<AuthSession>(SESSION_KEY);
 }
 
-export function writeSession(email: string): AuthSession {
-  const session: AuthSession = { email, establishedAt: Date.now() };
+export function writeSession(email: string, role?: Role): AuthSession {
+  const session: AuthSession = {
+    email,
+    establishedAt: Date.now(),
+    ...(role ? { role } : {}),
+  };
   write(SESSION_KEY, session);
   return session;
 }

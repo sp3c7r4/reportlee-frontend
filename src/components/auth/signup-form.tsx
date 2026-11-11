@@ -13,7 +13,12 @@ import { writeFlow } from "@/lib/session";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD = 8;
 
-type FieldErrors = { firstName?: string; lastName?: string; email?: string; password?: string };
+type FieldErrors = {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  password?: string;
+};
 
 export function SignupForm() {
   const router = useRouter();
@@ -31,13 +36,19 @@ export function SignupForm() {
     const nextErrors: FieldErrors = {};
     if (!firstName.trim()) nextErrors.firstName = "Enter your first name.";
     if (!lastName.trim()) nextErrors.lastName = "Enter your last name.";
-    if (!EMAIL_PATTERN.test(email.trim())) nextErrors.email = "Enter a valid email address.";
+    if (!EMAIL_PATTERN.test(email.trim()))
+      nextErrors.email = "Enter a valid email address.";
     if (password.length < MIN_PASSWORD) {
       nextErrors.password = `Use at least ${MIN_PASSWORD} characters.`;
     }
     setErrors(nextErrors);
     setFormError(null);
-    if (nextErrors.firstName || nextErrors.lastName || nextErrors.email || nextErrors.password) {
+    if (
+      nextErrors.firstName ||
+      nextErrors.lastName ||
+      nextErrors.email ||
+      nextErrors.password
+    ) {
       return;
     }
 
@@ -57,8 +68,26 @@ export function SignupForm() {
         flow: "signup",
         email: email.trim(),
         requestedAt: result.requestedAt ?? Date.now(),
+        token: result.token,
       });
-      router.replace(`/verify?flow=signup&email=${encodeURIComponent(email.trim())}`);
+      router.replace(
+        `/verify?flow=signup&email=${encodeURIComponent(email.trim())}`,
+      );
+      return;
+    }
+    const fields = result.fieldErrors;
+    if (
+      fields?.firstName ||
+      fields?.lastName ||
+      fields?.email ||
+      fields?.password
+    ) {
+      setErrors({
+        firstName: fields.firstName,
+        lastName: fields.lastName,
+        email: fields.email,
+        password: fields.password,
+      });
       return;
     }
     setFormError(result.message);
@@ -120,7 +149,11 @@ export function SignupForm() {
         />
       </div>
 
-      <AuthSubmit label="Create account" pendingLabel="Creating account" pending={pending} />
+      <AuthSubmit
+        label="Create account"
+        pendingLabel="Creating account"
+        pending={pending}
+      />
 
       <OAuthButtons />
 

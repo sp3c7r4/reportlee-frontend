@@ -9,8 +9,9 @@ import {
   type User,
   type Workspace,
 } from "@/data/viewer";
+import { fetchMe, hasLiveSession, SIMULATED_AUTH } from "@/lib/auth";
 import { writeCookie } from "@/lib/cookies";
-import { readSession } from "@/lib/session";
+import { clearSession, readSession } from "@/lib/session";
 import { sidebarCookie, type Theme, themeCookie } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { ShellDrawer } from "./drawer";
@@ -36,8 +37,8 @@ type DashboardShellProps = {
  * Three things worth knowing. The Workspace choice is React state seeded from one
  * constant, so a reload forgets it and nothing stored can choose a role. The theme is
  * written for the shared parent domain, so it survives a Workspace switch. And the
- * session check is a convenience for a build with no backend, not a guard: it keeps a
- * session-less visit from sitting in an empty frame, and nothing more.
+ * session check is a convenience, not a guard: it keeps a session-less visit from
+ * sitting in an empty frame, and the API is what refuses a request.
  */
 export function DashboardShell({
   user,
@@ -60,17 +61,57 @@ export function DashboardShell({
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // Convenience only, not a guard. There is no backend, so the simulated session in
-  // sessionStorage is all that says anyone is here.
+  /* @info - Convenience only, not a guard: the API answering 401 is the real check.
+     Simulated, the sessionStorage record is all that says anyone is here. Live, the
+     in-memory token pair must exist and /auth/me must answer, and until it does the
+     frame renders nothing, so sample data never flashes for a signed-out visit. */
+  const [ready, setReady] = useState(SIMULATED_AUTH);
+  /* @info - Only name and email are overlaid: the sample records key on the sample
+     user id, so swapping it would empty every "mine" view. */
+  const [identity, setIdentity] = useState<Pick<User, "name" | "email"> | null>(
+    null,
+  );
   useEffect(() => {
-    if (!readSession()) router.replace("/login");
+    if (SIMULATED_AUTH) {
+      if (!readSession()) router.replace("/login");
+      return;
+    }
+    const leave = () => {
+      clearSession();
+      router.replace("/login");
+    };
+    if (!hasLiveSession()) {
+      leave();
+      return;
+    }
+    let cancelled = false;
+    void fetchMe().then((result) => {
+      if (cancelled) return;
+      if (!result.ok) {
+        // A dead session clears the pair; a network failure keeps it.
+        if (!hasLiveSession()) {
+          leave();
+          return;
+        }
+        setReady(true);
+        return;
+      }
+      const { email, name, role } = result.data;
+      setIdentity({ email, name: name || email });
+      // The sample Memberships stay; the mapped role only picks the starting one.
+      setActiveId(role === "admin" ? "mem_admin" : "mem_staff");
+      setReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
-  // Read once after paint: a ref callback would run on every render and flicker the
-  // overlays between containers.
+  // Read once the frame is painted: a ref callback would run on every render and
+  // flicker the overlays between containers.
   useEffect(() => {
-    setPortalContainer(rootRef.current);
-  }, []);
+    if (ready) setPortalContainer(rootRef.current);
+  }, [ready]);
 
   const membership = useMemo(() => membershipById(activeId), [activeId]);
   const workspaceFor = useMemo(
@@ -106,8 +147,10 @@ export function DashboardShell({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  if (!ready) return null;
+
   const value: ShellContextValue = {
-    user,
+    user: identity ? { ...user, ...identity } : user,
     membership,
     workspace,
     memberships,

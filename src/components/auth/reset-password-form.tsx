@@ -57,6 +57,10 @@ export function ResetPasswordForm() {
     setPending(false);
 
     if (!result.ok) {
+      if (result.fieldErrors?.password) {
+        setErrors({ password: result.fieldErrors.password });
+        return;
+      }
       setFormError(result.message);
       return;
     }
@@ -83,7 +87,9 @@ export function ResetPasswordForm() {
         >
           Back to sign in
         </Link>
-        <output className="block text-[13px] text-muted-foreground">Taking you to sign in.</output>
+        <output className="block text-[13px] text-muted-foreground">
+          Taking you to sign in.
+        </output>
       </div>
     );
   }
@@ -95,7 +101,11 @@ export function ResetPasswordForm() {
         onClick={() => clearFlow()}
         className="inline-flex w-fit items-center gap-1.5 font-medium text-[13.5px] text-muted-foreground transition-colors hover:text-ink"
       >
-        <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} className="size-4" />
+        <HugeiconsIcon
+          icon={ArrowLeft01Icon}
+          strokeWidth={2}
+          className="size-4"
+        />
         Back to sign in
       </Link>
 
@@ -133,7 +143,11 @@ export function ResetPasswordForm() {
         />
       </div>
 
-      <AuthSubmit label="Reset password" pendingLabel="Resetting" pending={pending} />
+      <AuthSubmit
+        label="Reset password"
+        pendingLabel="Resetting"
+        pending={pending}
+      />
     </form>
   );
 }

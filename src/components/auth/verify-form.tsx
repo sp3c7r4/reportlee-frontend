@@ -17,7 +17,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { requestSignInCode, resendCode, verifyCode } from "@/lib/auth";
+import {
+  requestPasswordReset,
+  requestSignInCode,
+  resendCode,
+  SIMULATED_AUTH,
+  verifyCode,
+} from "@/lib/auth";
 import {
   CODE_LENGTH,
   type FlowConfig,
@@ -26,6 +32,20 @@ import {
   resendSecondsLeft,
 } from "@/lib/otp";
 import { clearFlow, readFlow, writeFlow, writeSession } from "@/lib/session";
+
+/** A reset asks for its own code again, in the shape the login request answers. */
+async function requestNewResetCode(email: string) {
+  const result = await requestPasswordReset(email);
+  return result.ok
+    ? {
+        ok: true as const,
+        data: {
+          requestedAt: result.requestedAt ?? Date.now(),
+          token: result.token,
+        },
+      }
+    : result;
+}
 
 type VerifyFormProps = {
   flow: FlowConfig;
@@ -45,7 +65,7 @@ export function VerifyForm({ flow, email }: VerifyFormProps) {
   const otp = useRef<OtpInputHandle>(null);
 
   const [digits, setDigits] = useState<string[]>(() =>
-    Array.from({ length: CODE_LENGTH }, () => "")
+    Array.from({ length: CODE_LENGTH }, () => ""),
   );
   const [pending, setPending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -82,7 +102,8 @@ export function VerifyForm({ flow, email }: VerifyFormProps) {
 
   useEffect(() => {
     if (requestedAt === null) return;
-    const tick = () => setSecondsLeft(resendSecondsLeft(requestedAt, Date.now()));
+    const tick = () =>
+      setSecondsLeft(resendSecondsLeft(requestedAt, Date.now()));
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
@@ -101,9 +122,20 @@ export function VerifyForm({ flow, email }: VerifyFormProps) {
   }
 
   async function sendCode() {
+    // Against the API a login code cannot stand in for a signup code: the token it
+    // issues belongs to the login flow. Signup starts over from sign in.
+    if (!SIMULATED_AUTH && flow.id === "signup") {
+      setFormError(
+        "This code has expired. Go back to sign in and start again.",
+      );
+      return;
+    }
     setPending(true);
     setFormError(null);
-    const result = await requestSignInCode(email);
+    const result =
+      !SIMULATED_AUTH && flow.id === "reset"
+        ? await requestNewResetCode(email)
+        : await requestSignInCode(email);
     setPending(false);
     if (!result.ok) {
       setFormError(result.message);
@@ -130,7 +162,13 @@ export function VerifyForm({ flow, email }: VerifyFormProps) {
       return;
     }
     setRequestedAt(result.data.requestedAt);
-    writeFlow({ flow: flow.id, email, requestedAt: result.data.requestedAt });
+    // The API replaces the verification token on a resend; keep the new one.
+    writeFlow({
+      flow: flow.id,
+      email,
+      requestedAt: result.data.requestedAt,
+      token: result.data.token ?? readFlow()?.token,
+    });
     setStatus(`Code resent to ${email}.`);
   }
 
@@ -161,7 +199,7 @@ export function VerifyForm({ flow, email }: VerifyFormProps) {
 
     // A reset proves the address; it does not sign anyone in.
     if (flow.establishesSession) {
-      writeSession(email);
+      writeSession(email, result.data.role);
       clearFlow();
     }
     router.replace(flow.destination);
@@ -181,7 +219,11 @@ export function VerifyForm({ flow, email }: VerifyFormProps) {
         onClick={() => clearFlow()}
         className="inline-flex w-fit items-center gap-1.5 font-medium text-[13.5px] text-muted-foreground transition-colors hover:text-ink"
       >
-        <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} className="size-4" />
+        <HugeiconsIcon
+          icon={ArrowLeft01Icon}
+          strokeWidth={2}
+          className="size-4"
+        />
         Back to sign in
       </Link>
 
@@ -189,11 +231,14 @@ export function VerifyForm({ flow, email }: VerifyFormProps) {
         <h1 className="font-bold text-[26px] text-ink leading-[1.15] tracking-[-0.03em]">
           {flow.heading}
         </h1>
-        <p id={stateId} className="text-[15px] text-muted-foreground leading-[1.6]">
+        <p
+          id={stateId}
+          className="text-[15px] text-muted-foreground leading-[1.6]"
+        >
           {expired ? (
             <>
-              Your last code for <span className="text-ink">{email}</span> is no longer valid. Send
-              a new one to continue.
+              Your last code for <span className="text-ink">{email}</span> is no
+              longer valid. Send a new one to continue.
             </>
           ) : (
             <>
@@ -232,7 +277,9 @@ export function VerifyForm({ flow, email }: VerifyFormProps) {
 
         {/* Feedback about the resend belongs next to the control that caused it. */}
         {status ? (
-          <output className="block text-[13px] text-muted-foreground">{status}</output>
+          <output className="block text-[13px] text-muted-foreground">
+            {status}
+          </output>
         ) : null}
       </div>
 
@@ -242,7 +289,7 @@ export function VerifyForm({ flow, email }: VerifyFormProps) {
         pending={pending}
       />
 
-      {process.env.NODE_ENV !== "production" ? (
+      {SIMULATED_AUTH && process.env.NODE_ENV !== "production" ? (
         <p className="text-[12.5px] text-muted-foreground">
           Demo build: any six digits pass, 111111 is rejected.
         </p>

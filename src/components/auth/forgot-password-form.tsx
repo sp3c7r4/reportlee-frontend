@@ -41,8 +41,15 @@ export function ForgotPasswordForm() {
         flow: "reset",
         email: email.trim(),
         requestedAt: result.requestedAt ?? Date.now(),
+        token: result.token,
       });
-      router.replace(`/verify?flow=reset&email=${encodeURIComponent(email.trim())}`);
+      router.replace(
+        `/verify?flow=reset&email=${encodeURIComponent(email.trim())}`,
+      );
+      return;
+    }
+    if (result.fieldErrors?.email) {
+      setError(result.fieldErrors.email);
       return;
     }
     setFormError(result.message);
@@ -54,7 +61,11 @@ export function ForgotPasswordForm() {
         href="/login"
         className="inline-flex w-fit items-center gap-1.5 font-medium text-[13.5px] text-muted-foreground transition-colors hover:text-ink"
       >
-        <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} className="size-4" />
+        <HugeiconsIcon
+          icon={ArrowLeft01Icon}
+          strokeWidth={2}
+          className="size-4"
+        />
         Back to sign in
       </Link>
 
@@ -63,7 +74,8 @@ export function ForgotPasswordForm() {
           Reset your password
         </h1>
         <p className="text-[15px] text-muted-foreground">
-          Tell us the email on the account and we will send a code to set a new one.
+          Tell us the email on the account and we will send a code to set a new
+          one.
         </p>
       </header>
 
@@ -80,7 +92,11 @@ export function ForgotPasswordForm() {
         error={error}
       />
 
-      <AuthSubmit label="Send reset code" pendingLabel="Sending" pending={pending} />
+      <AuthSubmit
+        label="Send reset code"
+        pendingLabel="Sending"
+        pending={pending}
+      />
     </form>
   );
 }

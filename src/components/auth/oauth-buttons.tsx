@@ -18,6 +18,10 @@ const PROVIDERS = [
 export function OAuthButtons() {
   const router = useRouter();
 
+  // The backend has no provider routes yet, so the live build offers none rather
+  // than a button that lands on a 404.
+  if (!SIMULATED_AUTH) return null;
+
   // A real provider leaves the app and returns through the API's callback. This build
   // has no callback, so a provider signs the sample person in and lands on the frame.
   function simulate() {

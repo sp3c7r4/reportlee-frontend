@@ -42,6 +42,10 @@ export function OtpLoginForm() {
     setPending(false);
 
     if (!result.ok) {
+      if (result.fieldErrors?.email) {
+        setError(result.fieldErrors.email);
+        return;
+      }
       setFormError(result.message);
       return;
     }
@@ -53,7 +57,9 @@ export function OtpLoginForm() {
       requestedAt: result.data.requestedAt,
       token: result.data.token,
     });
-    router.replace(`/verify?flow=login&email=${encodeURIComponent(email.trim())}`);
+    router.replace(
+      `/verify?flow=login&email=${encodeURIComponent(email.trim())}`,
+    );
   }
 
   return (
@@ -63,7 +69,11 @@ export function OtpLoginForm() {
         onClick={() => setEmail("")}
         className="inline-flex w-fit items-center gap-1.5 font-medium text-[13.5px] text-muted-foreground transition-colors hover:text-ink"
       >
-        <HugeiconsIcon icon={ArrowLeft01Icon} strokeWidth={2} className="size-4" />
+        <HugeiconsIcon
+          icon={ArrowLeft01Icon}
+          strokeWidth={2}
+          className="size-4"
+        />
         Back to sign in
       </Link>
 

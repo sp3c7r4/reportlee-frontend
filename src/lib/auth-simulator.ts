@@ -130,6 +130,22 @@ export async function simulateSignUp(
   return { ok: true, data: { requestedAt: Date.now() } };
 }
 
+/** Answers /auth/me from the address the simulated session holds. */
+export async function simulateMe(
+  email: string,
+): Promise<
+  SimulatedResult<{ id: string; email: string; name: string; role: "admin" }>
+> {
+  if (!EMAIL_PATTERN.test(email.trim())) {
+    return { ok: false, message: "Your session has ended. Sign in again." };
+  }
+  const name = email.trim().split("@")[0];
+  return {
+    ok: true,
+    data: { id: "simulated", email: email.trim(), name, role: "admin" },
+  };
+}
+
 export async function simulateRequestPasswordReset(
   email: string,
   { delayMs = SIMULATED_DELAY_MS }: Options = {},
