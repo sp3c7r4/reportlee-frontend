@@ -34,8 +34,7 @@ export function LoginForm() {
     event.preventDefault();
 
     const nextErrors: FieldErrors = {};
-    if (!EMAIL_PATTERN.test(email.trim()))
-      nextErrors.email = "Enter a valid email address.";
+    if (!EMAIL_PATTERN.test(email.trim())) nextErrors.email = "Enter a valid email address.";
     if (password.length < MIN_PASSWORD) {
       nextErrors.password = `Passwords are at least ${MIN_PASSWORD} characters.`;
     }
