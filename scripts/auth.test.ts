@@ -235,7 +235,10 @@ test("sign out after an in-call refresh sends the rotated refresh token", async 
       };
     }
     if (seen.auth === "Bearer fake-old-a") {
-      return { status: 401, body: { success: false, error: { message: "Token expired" } } };
+      return {
+        status: 401,
+        body: { success: false, error: { message: "Token expired" } },
+      };
     }
     return { status: 200, body: { success: true, data: { message: "ok" } } };
   });
