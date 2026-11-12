@@ -179,13 +179,15 @@ export function refreshSession(): Promise<boolean> {
 async function authed<T>(
   method: "GET" | "POST",
   path: string,
-  body: unknown,
+  body: unknown | (() => unknown),
   fallback: string,
 ): Promise<Call<T>> {
+  /* @info - a body function is read per attempt, so a retry sees rotated tokens. */
+  const read = () => (typeof body === "function" ? body() : body);
   const first = await request<T>(
     method,
     path,
-    body,
+    read(),
     fallback,
     getAccessToken(),
   );
@@ -197,7 +199,7 @@ async function authed<T>(
   const second = await request<T>(
     method,
     path,
-    body,
+    read(),
     fallback,
     getAccessToken(),
   );
@@ -402,13 +404,12 @@ export async function requestPasswordReset(
 /** Ends the session on the server when possible, and always forgets it locally. */
 export async function signOut(): Promise<void> {
   if (!SIMULATED_AUTH) {
-    const refreshToken = getRefreshToken();
-    if (refreshToken) {
+    if (getRefreshToken()) {
       // Best effort: a failed logout must not keep anyone signed in here.
       await authed<unknown>(
         "POST",
         "/auth/logout",
-        { refreshToken },
+        () => ({ refreshToken: getRefreshToken() }),
         "We could not sign you out.",
       );
     }

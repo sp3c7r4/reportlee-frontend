@@ -221,3 +221,31 @@ test("sign out forgets the pair even when the server fails", async () => {
   await signOut();
   assert.equal(hasTokens(), false);
 });
+
+test("sign out after an in-call refresh sends the rotated refresh token", async () => {
+  setTokens({ accessToken: "fake-old-a", refreshToken: "fake-old-r" });
+  const calls = stub((seen) => {
+    if (seen.url.endsWith("/auth/refresh")) {
+      return {
+        status: 200,
+        body: {
+          success: true,
+          data: { accessToken: "fake-new-a", refreshToken: "fake-new-r" },
+        },
+      };
+    }
+    if (seen.auth === "Bearer fake-old-a") {
+      return { status: 401, body: { success: false, error: { message: "Token expired" } } };
+    }
+    return { status: 200, body: { success: true, data: { message: "ok" } } };
+  });
+
+  await signOut();
+
+  const logouts = calls.filter((call) => call.url.endsWith("/auth/logout"));
+  assert.equal(logouts.length, 2);
+  assert.deepEqual(logouts[0]?.body, { refreshToken: "fake-old-r" });
+  assert.deepEqual(logouts[1]?.body, { refreshToken: "fake-new-r" });
+  assert.equal(logouts[1]?.auth, "Bearer fake-new-a");
+  assert.equal(hasTokens(), false);
+});
