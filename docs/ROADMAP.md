@@ -33,7 +33,9 @@ OpenSpec changes under `openspec/changes/`; there is no other spec location.
 
 ## In progress
 
-Nothing. Ask before starting the next row.
+| Date | Feature | Status |
+|---|---|---|
+| 2026-11-11 | auth-backend-wiring: auth calls, in-memory tokens, refresh and sign out against `/api/v1` (decisions D1 to D5 approved 2026-11-11) | Built on `feat/wire-real-auth`, in fresh-context review |
 
 ## Order
 
@@ -62,6 +64,8 @@ Nothing. Every UI task from UI-1 to UI-17 and the ai-drafting change is built; `
 --strict` passes 11 of 11. The frontend is feature-complete on sample data and the backend is the next repo.
 
 ## Backlog (known, not started)
+
+- AGENTS.md is out of date: it says reportlee-backend does not exist and there is no local stack; both now exist (backend on :5000, Postgres on host port 5434)
 
 - Biome backlog: 128 errors and 5 warnings on 2026-10-23. Do not chase zero inside a feature task.
 - Three sidebar links 404 until their phase: `/dashboard/tasks`, `/dashboard/review`, `/dashboard/spaces`.
