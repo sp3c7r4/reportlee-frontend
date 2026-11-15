@@ -37,7 +37,7 @@ OpenSpec changes under `openspec/changes/`; there is no other spec location.
 |---|---|---|
 | 2026-11-11 | auth-backend-wiring: auth calls, in-memory tokens, refresh and sign out against `/api/v1` (decisions D1 to D5 approved 2026-11-11) | Built on `feat/wire-real-auth`, in fresh-context review |
 
-| 2026-11-12 | signup-member-role: new signups are never admin, saved as member (staff), land on the dashboard; admins grant or remove admin through `PATCH /api/v1/user/:id/role` (decisions 1 to 4 approved 2026-11-12) | Spec written, build on `feat/signup-member-role` |
+| 2026-11-12 | signup-member-role: new signups are never admin, saved as member (staff), land on the dashboard; admins grant or remove admin through `PATCH /api/v1/user/:id/role` (decisions 1 to 4 approved 2026-11-12) | Built, in fresh-context review (`feat/signup-member-role`) |
 ## Order
 
 Frontend only. `reportlee-backend/` is parked until the frontend is finished, so every screen is built on
