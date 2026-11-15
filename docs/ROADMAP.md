@@ -37,6 +37,7 @@ OpenSpec changes under `openspec/changes/`; there is no other spec location.
 |---|---|---|
 | 2026-11-11 | auth-backend-wiring: auth calls, in-memory tokens, refresh and sign out against `/api/v1` (decisions D1 to D5 approved 2026-11-11) | Built on `feat/wire-real-auth`, in fresh-context review |
 
+| 2026-11-12 | signup-member-role: new signups are never admin, saved as member (staff), land on the dashboard; admins grant or remove admin through `PATCH /api/v1/user/:id/role` (decisions 1 to 4 approved 2026-11-12) | Spec written, build on `feat/signup-member-role` |
 ## Order
 
 Frontend only. `reportlee-backend/` is parked until the frontend is finished, so every screen is built on
@@ -65,7 +66,8 @@ Nothing. Every UI task from UI-1 to UI-17 and the ai-drafting change is built; `
 
 ## Backlog (known, not started)
 
-- AGENTS.md is out of date: it says reportlee-backend does not exist and there is no local stack; both now exist (backend on :5000, Postgres on host port 5434)
+- AGENTS.md is out of date about the backend: it says reportlee-backend does not exist and there is no local stack; both now exist (backend on :5000, Postgres on host port 5434)
+- No admin UI for granting roles yet; use the PATCH endpoint /api/v1/user/:id/role
 
 - Biome backlog: 128 errors and 5 warnings on 2026-10-23. Do not chase zero inside a feature task.
 - Three sidebar links 404 until their phase: `/dashboard/tasks`, `/dashboard/review`, `/dashboard/spaces`.
