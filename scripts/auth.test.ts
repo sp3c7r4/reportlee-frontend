@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { fetchMe, signIn, signOut } from "../src/lib/auth.ts";
+import {
+  fetchMe,
+  signIn,
+  signOut,
+  signUp,
+  verifyCode,
+} from "../src/lib/auth.ts";
 import {
   clearTokens,
   getAccessToken,
@@ -74,6 +80,49 @@ test("sign in sends loginType, stores the pair and maps the role", async () => {
     role: "staff",
   });
   assert.equal(getAccessToken(), "fake-a");
+});
+
+test("sign up sends no role, so the server decides it", async () => {
+  const calls = stub(() => ({
+    status: 200,
+    body: { success: true, data: { token: "fake-v" } },
+  }));
+  const result = await signUp({
+    firstName: "Ada",
+    lastName: "Obi",
+    email: "ada@example.com",
+    password: "not-a-real-pass",
+  });
+  assert.ok(calls[0].url.endsWith("/auth/signup"));
+  assert.deepEqual(calls[0].body, {
+    firstName: "Ada",
+    lastName: "Obi",
+    email: "ada@example.com",
+    password: "not-a-real-pass",
+  });
+  assert.equal("role" in (calls[0].body as object), false);
+  assert.equal(result.ok, true);
+});
+
+test("verify-email maps member to staff and admin to admin", async () => {
+  for (const [roles, expected] of [
+    [["member"], "staff"],
+    [["admin"], "admin"],
+  ] as const) {
+    stub(() => ({
+      status: 200,
+      body: {
+        success: true,
+        data: {
+          user: { roles },
+          accessToken: "fake-a",
+          refreshToken: "fake-r",
+        },
+      },
+    }));
+    const result = await verifyCode("123456");
+    assert.deepEqual(result, { ok: true, data: { role: expected } });
+  }
 });
 
 test("a failed sign in keeps the documented shape and the field errors", async () => {

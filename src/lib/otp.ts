@@ -38,8 +38,9 @@ export const FLOWS: Record<AuthFlow, FlowConfig> = {
     heading: "Verify your email",
     subtextLead: SUBTEXT_LEAD,
     subtextTrail: SUBTEXT_TRAIL,
-    // A new account has no workspace yet, so verification hands off to setup.
-    destination: "/onboarding",
+    // A new account is a staff member. Workspace setup is for admins, so
+    // verification lands on the dashboard.
+    destination: "/dashboard",
     establishesSession: true,
   },
   reset: {

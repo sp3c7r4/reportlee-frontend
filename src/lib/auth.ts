@@ -251,7 +251,11 @@ export async function verifyCode(
     const result = await simulateVerifyCode(code, {
       requestedAt: readFlow()?.requestedAt,
     });
-    return result.ok ? { ok: true, data: {} } : result;
+    if (!result.ok) return result;
+    return {
+      ok: true,
+      data: { role: readFlow()?.flow === "signup" ? "staff" : undefined },
+    };
   }
 
   const flow = readFlow();
@@ -362,13 +366,11 @@ export async function signUp(input: {
       : result;
   }
 
-  /* @info - The backend requires a role. Signup leads to creating a Workspace,
-     which is an admin act; members arrive by invitation. */
   const result = settle(
     await request<{ token?: string }>(
       "POST",
       "/auth/signup",
-      { ...input, role: "admin" },
+      input,
       "We could not create that account.",
     ),
   );

@@ -9,6 +9,7 @@ import { StepIndicator } from "@/components/onboarding/step-indicator";
 import { WorkspaceStep } from "@/components/onboarding/workspace-step";
 import { gsap, MOTION_OK, useGSAP } from "@/lib/gsap";
 import {
+  canEnterOnboarding,
   cleanRows,
   invalidInviteIndexes,
   isReservedSlug,
@@ -19,6 +20,7 @@ import {
   slugify,
   stepFromParam,
 } from "@/lib/onboarding";
+import { readSession } from "@/lib/session";
 
 type OnboardingFlowProps = {
   /** From the address, already the only thing the URL is allowed to carry. */
@@ -45,6 +47,7 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps) {
 
   const [stepId, setStepId] = useState<OnboardingStepId>(() => stepFromParam(initialStep).id);
   const step = stepFromParam(stepId);
+  const [allowed, setAllowed] = useState(false);
 
   const [orgName, setOrgName] = useState("");
   const [slug, setSlug] = useState("");
@@ -58,8 +61,18 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps) {
   // The heading of a new step takes focus, so the flow is walkable by keyboard
   // without hunting for where the content moved to.
   useEffect(() => {
-    heading.current?.focus();
-  }, []);
+    if (allowed) heading.current?.focus();
+  }, [allowed]);
+
+  /* @info - Convenience only: sends a non-admin away from workspace setup. The server
+     guards every write. The form stays unrendered until the check has passed. */
+  useEffect(() => {
+    if (canEnterOnboarding(readSession()?.role)) {
+      setAllowed(true);
+    } else {
+      router.replace("/dashboard");
+    }
+  }, [router]);
 
   useGSAP(
     () => {
@@ -97,7 +110,7 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps) {
       });
       return () => mm.revert();
     },
-    { dependencies: [step.id], scope: root, revertOnUpdate: true }
+    { dependencies: [step.id, allowed], scope: root, revertOnUpdate: true }
   );
 
   function goTo(id: OnboardingStepId) {
@@ -147,6 +160,8 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps) {
   }
 
   const previous = previousStep(step);
+
+  if (!allowed) return null;
 
   return (
     <div ref={root} className="flex flex-col gap-8">

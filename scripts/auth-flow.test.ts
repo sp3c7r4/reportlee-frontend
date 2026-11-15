@@ -15,7 +15,7 @@ test("every flow lands on a route that exists", () => {
   const destinations = Object.values(FLOWS).map((flow) => flow.destination);
   assert.deepEqual(destinations.sort(), [
     "/dashboard",
-    "/onboarding",
+    "/dashboard",
     "/reset-password",
   ]);
 });

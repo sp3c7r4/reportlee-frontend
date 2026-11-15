@@ -7,6 +7,8 @@
  * here reads a step out of the address without checking it against the table.
  */
 
+import type { Role } from "./nav.ts";
+
 export const SPACE_LIMIT = 4;
 export const INVITE_LIMIT = 5;
 /** The address a workspace lives at: <slug>.reportlee.app */
@@ -81,6 +83,11 @@ export const STEPS: readonly OnboardingStep[] = [
     continueLabel: "Go to dashboard",
   },
 ];
+
+/** Workspace setup is an admin act. Everyone else is sent to the dashboard. */
+export function canEnterOnboarding(role: Role | undefined): boolean {
+  return role === "admin";
+}
 
 /** Resolves the query parameter, falling back to the first step. */
 export function stepFromParam(
