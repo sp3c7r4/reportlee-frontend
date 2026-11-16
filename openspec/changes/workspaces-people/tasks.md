@@ -28,7 +28,7 @@ Run commands inside the repo folder. Before any migration print `NODE_ENV` and c
 
 ## Validation
 
-Spec validation, run on branch `feat/workspaces-people` (docs only, so no lint, tests or build):
+Spec validation, iteration 2 after the design review (the em dash search over the change folder and docs/ROADMAP.md found no hit), run on branch `feat/workspaces-people` (docs only, so no lint, tests or build):
 
 ```
 $ openspec validate workspaces-people --strict
