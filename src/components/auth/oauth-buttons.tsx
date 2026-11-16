@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { USER } from "@/data/viewer";
+import { USER } from "@/data/sample-viewer";
 import { oauthStartUrl, SIMULATED_AUTH } from "@/lib/auth";
 import { writeSession } from "@/lib/session";
 

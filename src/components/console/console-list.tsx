@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { SPACES } from "@/data/members";
 import { SAMPLE_PERIOD, SAMPLE_REPORTS } from "@/data/reports";
-import { WORKSPACES } from "@/data/viewer";
+import { WORKSPACES } from "@/data/sample-viewer";
 import {
   auditLine,
   OPERATOR,

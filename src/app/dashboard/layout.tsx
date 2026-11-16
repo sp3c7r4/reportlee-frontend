@@ -2,12 +2,6 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { DashboardShell } from "@/components/dashboard/shell";
 import {
-  ACTIVE_MEMBERSHIP_ID,
-  MEMBERSHIPS,
-  USER,
-  WORKSPACES,
-} from "@/data/viewer";
-import {
   parseSidebar,
   parseTheme,
   SIDEBAR_COOKIE,
@@ -26,9 +20,8 @@ export const metadata: Metadata = {
    on navigation. See Next 16 "Authentication with Cache Components". */
 export const instant = false;
 
-/* @info - The frame reads its sample data on the server and hands plain records to the
-   client shell, so the switcher can hold the choice in memory without a store.
-   ACTIVE_MEMBERSHIP_ID is the only thing that decides the starting role. */
+/* @info - The server reads only the theme and sidebar cookies. Memberships need the
+   access token, which lives in browser memory, so the client shell loads them. */
 export default async function DashboardLayout({
   children,
 }: {
@@ -39,14 +32,7 @@ export default async function DashboardLayout({
   const collapsed = parseSidebar(stored.get(SIDEBAR_COOKIE)?.value);
 
   return (
-    <DashboardShell
-      user={USER}
-      memberships={MEMBERSHIPS}
-      workspaces={WORKSPACES}
-      initialMembershipId={ACTIVE_MEMBERSHIP_ID}
-      initialTheme={theme}
-      initialCollapsed={collapsed}
-    >
+    <DashboardShell initialTheme={theme} initialCollapsed={collapsed}>
       {children}
     </DashboardShell>
   );

@@ -18,7 +18,12 @@ export type ShellContextValue = {
   workspace: Workspace;
   memberships: Membership[];
   workspaceFor: (membership: Membership) => Workspace;
+  /** Switches Workspace through the API. A failure leaves the state as it was. */
   selectMembership: (id: string) => void;
+  /** Adds a Workspace the person just created and makes it the active one. */
+  addWorkspace: (workspace: Workspace, membership: Membership) => void;
+  /** Loads the Memberships again, for a count the server has changed. */
+  reload: () => void;
   portalContainer: HTMLElement | null;
   /** The page assigns the top bar's action slot, then portals into it. */
   assignActionSlot: (element: HTMLElement | null) => void;
