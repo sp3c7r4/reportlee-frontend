@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import type { Membership, User, Workspace } from "@/data/viewer";
 import { hasLiveSession, SIMULATED_AUTH } from "@/lib/auth";
 import { writeCookie } from "@/lib/cookies";
+import { inviteReturnPath } from "@/lib/pending-invite";
 import { clearSession, readSession } from "@/lib/session";
 import { sidebarCookie, type Theme, themeCookie } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -91,6 +92,13 @@ export function DashboardShell({
           return;
         }
         setLoad({ state: "error" });
+        return;
+      }
+      /* @info - Someone who opened an invitation while signed out comes back to it once,
+         before the empty-Workspace redirect below can take them to onboarding. */
+      const returnTo = inviteReturnPath(window.sessionStorage);
+      if (returnTo) {
+        router.replace(returnTo);
         return;
       }
       const { user, memberships, workspaces, lastWorkspaceId } = result.data;
