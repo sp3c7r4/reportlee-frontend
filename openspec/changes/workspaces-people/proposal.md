@@ -11,7 +11,7 @@ Signed-in users today have no Workspace, Space or Membership on the server. The 
 - Switch the frontend from mock to API through `src/lib` only: dashboard shell and Workspace switcher, onboarding, People, Spaces, and a new `/invite/[token]` page. Tokens stay in memory and the base URL stays `NEXT_PUBLIC_API_URL`.
 - Extract the shared `request` and `authed` helpers from `src/lib/auth.ts` into `src/lib/api.ts` (move only, no auth behaviour change).
 - **No BREAKING change.** `/auth/me`, login and every existing response keep their shape. `user_roles` is untouched: `admin` there stays the platform Super Admin.
-- Owner-visible defaults (recorded, not yet approved): see "Planner decisions" in `design.md` (P1 to P9). The two that most need a yes: P2 (the invite link appears once in a create response body) and P4 (a pending invite token is held in `sessionStorage` across login).
+- Owner-visible defaults (recorded, not yet approved): see "Planner decisions" in `design.md` (P1 to P10). The three that most need a yes: P10 (no limit on Workspaces or invite emails, so the owner's Gmail sender could be suspended at about 500 a day), P2 (the invite link appears once in a create response body) and P4 (a pending invite token is held in `sessionStorage` across login).
 
 ## Capabilities
 

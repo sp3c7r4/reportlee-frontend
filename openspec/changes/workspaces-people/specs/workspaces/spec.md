@@ -12,8 +12,22 @@ The system SHALL let any signed-in person with a verified email create a Workspa
 - **THEN** the Workspace exists, the person is its only active Admin, and the response contains the Workspace and the Membership
 
 #### Scenario: Unverified email
+
 - **WHEN** a person whose email is not verified creates a Workspace
+
+- **THEN** the response is 403 with the code "EMAIL_NOT_VERIFIED" and nothing is created
+
+#### Scenario: Stale session
+
+- **WHEN** a person's session says the email is verified but their account says it is not
+
 - **THEN** the response is 403 and nothing is created
+
+#### Scenario: Deleted account
+
+- **WHEN** a person whose account is deleted or suspended creates a Workspace
+
+- **THEN** the response is 401 and nothing is created
 
 #### Scenario: Many Workspaces
 - **WHEN** a person who already has a Membership creates another Workspace

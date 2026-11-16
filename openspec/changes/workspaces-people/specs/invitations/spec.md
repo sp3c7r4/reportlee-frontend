@@ -72,8 +72,22 @@ The system SHALL let a signed-in person with a verified email equal (ignoring ca
 - **THEN** they are an active member with the invited role and Space
 
 #### Scenario: Wrong email
+
 - **WHEN** a person with a different verified email opens the link
-- **THEN** the response is 403 and says which email address to use, with the local part hidden
+
+- **THEN** the response is 403 with the code "INVITE_EMAIL_MISMATCH" and says which email address to use, with the local part hidden
+
+#### Scenario: Verified state comes from the account
+
+- **WHEN** a person's session says the email is verified but their account says it is not
+
+- **THEN** the response is 403 with the code "EMAIL_NOT_VERIFIED"
+
+#### Scenario: Deleted or suspended account
+
+- **WHEN** a person whose account is deleted or suspended opens or accepts the link
+
+- **THEN** the response is 401
 
 #### Scenario: Expired, revoked or unknown
 - **WHEN** the token is older than 7 days, revoked, already used by someone else, or unknown
@@ -84,8 +98,22 @@ The system SHALL let a signed-in person with a verified email equal (ignoring ca
 - **THEN** exactly one Membership exists and no second one is created
 
 #### Scenario: Unverified email
+
 - **WHEN** a person with an unverified email accepts
-- **THEN** the response is 403
+
+- **THEN** the response is 403 with the code "EMAIL_NOT_VERIFIED"
+
+#### Scenario: Turned-off access
+
+- **WHEN** a person whose Membership in the Workspace is deactivated accepts a new invitation
+
+- **THEN** the response is 409 saying to ask an Admin to reactivate them, and the invitation stays pending
+
+#### Scenario: Archived Space
+
+- **WHEN** the invited Space was archived before acceptance
+
+- **THEN** the response is 409 and the invitation stays pending
 
 #### Scenario: Head invitation
 - **WHEN** an Admin invited someone as Head and the Space already has a Head at acceptance
@@ -98,12 +126,25 @@ The system SHALL let an Admin, or the member who sent an invitation, revoke it w
 - **WHEN** an Admin revokes a pending invitation
 - **THEN** its link no longer works and it leaves the pending list
 
+#### Scenario: Not yet swept
+
+- **WHEN** an Admin revokes a pending invitation that is past its 7 days but not yet marked expired
+
+- **THEN** the response is 200 and the invitation leaves the list
+
+#### Scenario: Already expired and marked
+
+- **WHEN** an Admin revokes an invitation that is already marked expired
+
+- **THEN** the response is 404
+
 #### Scenario: Another Head's invitation
 - **WHEN** a Head revokes an invitation sent by a different member
 - **THEN** the response is 403
 
 ### Requirement: Listing invitations
-The system SHALL let an Admin list every pending invitation of the Workspace, and a Head list those for their own Space. Staff SHALL NOT list them. Each row says whether it has expired.
+
+The system SHALL let an Admin list every pending invitation of the Workspace, and a Head list those for their own Space. Staff SHALL NOT list them. Each row says whether it has expired, and an expired row SHALL NOT count toward the seat usage shown to the user.
 
 #### Scenario: Head sees own Space only
 - **WHEN** a Head lists invitations

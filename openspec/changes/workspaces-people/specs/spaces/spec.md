@@ -46,8 +46,16 @@ The system SHALL let an Admin appoint a Head from the active members of that Spa
 - **THEN** the second member is Head and the first is Staff in the same Space
 
 #### Scenario: Outsider
+
 - **WHEN** an Admin appoints a member who belongs to a different Space
+
 - **THEN** the response is 400 with a field error
+
+#### Scenario: Same Head
+
+- **WHEN** an Admin appoints the member who is already Head
+
+- **THEN** the response is 200 and nothing changes
 
 ### Requirement: Heads edit only their own Space's KPI template
 The system SHALL let an Admin, or the Head of that Space, change its KPI template (up to 20 rows of name and unit). A Head SHALL NOT change any other field or any other Space.
@@ -65,8 +73,23 @@ The system SHALL let an Admin, or the Head of that Space, change its KPI templat
 - **THEN** the response is 403 and the name is unchanged
 
 ### Requirement: Space changes are audited
-The system SHALL record Space creation and archiving in the audit log in the same step.
+
+The system SHALL record Space creation, renaming, restoring, archiving, KPI template changes and Head changes in the audit log in the same step, without names of people or email addresses. When a Head change flips a member's role, the system SHALL also record a role change for each member affected.
 
 #### Scenario: Audit
+
 - **WHEN** an Admin creates then archives a Space
+
 - **THEN** entries "space.created" and "space.archived" exist
+
+#### Scenario: Rename and template
+
+- **WHEN** an Admin renames a Space, and later a Head saves its KPI template
+
+- **THEN** two "space.updated" entries exist
+
+#### Scenario: Head swap
+
+- **WHEN** an Admin appoints a second member as Head
+
+- **THEN** a "space.updated" entry and a "role.change" entry for each of the two members exist

@@ -85,6 +85,8 @@ Nothing. Every UI task from UI-1 to UI-17 and the ai-drafting change is built; `
 - Storage keys still read `iroyin` (`iroyin.auth.flow`, `iroyin.auth.session`, `iroyin-sidebar`) and the package name is still `iroyin`. The theme cookie is renamed; these three are left because renaming them would drop in-flight OTP flows, and the sidebar cookie has no reader today.
 - The dashboard is not in the code. `docs/UI.md` and `docs/UI-BUILD-ORDER.md` still describe it as the target design, and say so at the top.
 - The onboarding invite step offers Staff and Admin only. A Head of Space needs a Space, so that picker is part of UI-4 and UI-5.
+- workspaces-people (P10): no limit on Workspaces per user or on invitation emails. Unlimited invite emails could get the owner's Gmail sender (about 500 a day) suspended. Proposed cap if wanted: 5 Workspaces per user and 20 invitation emails per Workspace per hour.
+- workspaces-people: the backend's `redactLog` does not mask `email`, so Zod request logging can print invited addresses. Adding `email` to `SENSITIVE_KEYS` changes existing log output, so it needs its own approval.
 
 ## Not v1
 

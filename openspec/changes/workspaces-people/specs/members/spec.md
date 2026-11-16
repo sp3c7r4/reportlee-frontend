@@ -4,6 +4,16 @@ Defines the member roster of a Workspace and how Admins change a member's role, 
 
 ## ADDED Requirements
 
+### Requirement: Only active people count
+
+The system SHALL count a Membership as active only when it is switched on and its person has not deleted their account or been suspended. Every count of Admins, seats, Space members and Head candidates SHALL use that definition.
+
+#### Scenario: The only Admin deletes their account
+
+- **WHEN** a Workspace's only Admin has deleted their account
+
+- **THEN** the Workspace counts no active Admin, and another Admin can be promoted or invited
+
 ### Requirement: Members see the roster, Admins see more
 The system SHALL let every active member list the Workspace's members with name, role, Space and active status. Only Admins SHALL receive email addresses and deactivated members.
 
@@ -71,8 +81,16 @@ The system SHALL keep a deactivated member's history, free their seat, clear any
 The system SHALL refuse to make someone a Head of a Space that already has a different Head, and refuse to move a Head to another Space while they are Head.
 
 #### Scenario: Second Head
+
 - **WHEN** an Admin sets a member's role to Head in a Space that has a Head
+
 - **THEN** the response is 409 saying to replace the Head from the Space
+
+#### Scenario: First Head
+
+- **WHEN** an Admin sets a Staff member's role to Head in a Space with no Head
+
+- **THEN** the member is Head and the Space lists them as its Head
 
 ### Requirement: Member changes are audited
 The system SHALL record role changes, deactivations and reactivations in the audit log in the same step.
