@@ -94,3 +94,27 @@ Deviations and notes for reviewers:
 - Design review 2 had 0 HIGH open (verdict APPROVED, two NITs: the `send-response.ts` path and the `Tx` type source). Both are honoured in the build: `src/helpers/response/send-response.ts` is the file changed and `Tx` derives from `ReturnType<typeof getDb>`. No HIGH to fix.
 - Docker Desktop was found stopped mid-run (the `app-db` and `app-cache` containers had exited); only those two containers were restarted, the `stockpulse-*` ones were left alone.
 - Windows line endings: files are stored LF in the working tree and git warns it will convert to CRLF. The migration runner hashes file content, so a CRLF checkout of `0001_workspaces_people.sql` would hash differently and re-run the (idempotent) file once. Same applies to `0000`. Worth a `.gitattributes` Backlog line.
+
+### Iteration 1: cross-part integration check and Gate 3, both repos (2026-11-16)
+Seams checked by reading both sides (no mismatch found):
+- Paths: `/me/memberships`, `/me/last-workspace`, `/workspaces`, `/workspaces/slug-available`, `/workspaces/:wsId`, and its `/spaces`, `/members`, `/invitations`, plus `/invitations/preview` and `/invitations/accept`, match `src/lib/{workspaces,spaces-api,members,invitations}.ts` and the backend `router.ts`.
+- DTOs: `WorkspaceDto`, `MembershipDto`, `SpaceSummaryDto`, `RosterMemberDto`, `InvitationDto` and the preview body match `src/lib/api-types.ts`, `src/data/viewer.ts` and `src/data/members.ts` field by field. Ids are strings on both sides.
+- Errors: a coded 403 sends `error: { message, code }` (`error.ts`) and the frontend reads `error.code` (`EMAIL_NOT_VERIFIED`, `INVITE_EMAIL_MISMATCH`). A Zod 400 sends a flat field map, which `extractError` reads.
+- Fix made: one Biome warning (`useOptionalChain`) in `invitation.service.ts` revoke. Behaviour is unchanged.
+
+Backend (`check:circular` allowed only the known `user.model <-> user-role.model` cycle):
+```
+biome check (79 touched files)   exit 0    14 s   0 errors, 0 warnings
+tsc --noEmit                     exit 0   118 s
+check:circular                   exit 0    33 s   1 cycle, the known one
+vitest (9 touched suites)        exit 0   297 s   156 tests passed (setup 142 s; over the 3 minute cap)
+npm test (full)                  exit 0   158 s   21 files, 216 tests passed, 0 failed
+npm run build                    exit 0     9 s   Build complete.
+```
+Frontend:
+```
+biome check (34 touched files)   exit 0     4 s
+tsc --noEmit                     exit 0    33 s
+npm test                         exit 0    17 s   275 passed, 0 failed
+npm run build                    exit 0    64 s
+```
