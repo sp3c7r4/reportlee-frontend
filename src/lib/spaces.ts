@@ -1,6 +1,5 @@
-import type { Report } from "../data/reports";
-import type { KpiEntry, KpiTemplateField } from "../data/reports";
 import type { RosterMember, SpaceSummary } from "../data/members";
+import type { KpiEntry, KpiTemplateField, Report } from "../data/reports";
 import type { Role } from "./nav";
 
 /**
@@ -15,10 +14,10 @@ export type SpaceViewer = {
   space: string | null;
 };
 
-export function spaceById(
-  spaces: SpaceSummary[],
+export function spaceById<T extends SpaceSummary>(
+  spaces: T[],
   id: string,
-): SpaceSummary | null {
+): T | null {
   return spaces.find((space) => space.id === id) ?? null;
 }
 
@@ -26,10 +25,10 @@ export function spaceById(
  * The Space a person means by "my Space": the one they head, else the one they belong
  * to by name, else null.
  */
-export function mySpace(
-  spaces: SpaceSummary[],
+export function mySpace<T extends SpaceSummary>(
+  spaces: T[],
   membership: { id: string; space: string | null },
-): SpaceSummary | null {
+): T | null {
   return (
     spaces.find((space) => space.headMembershipId === membership.id) ??
     spaces.find((space) => space.name === membership.space) ??
