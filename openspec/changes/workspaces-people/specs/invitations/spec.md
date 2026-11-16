@@ -49,12 +49,18 @@ The system SHALL refuse to invite an email that already has a Membership (active
 - **WHEN** an Admin invites the email of an active member
 - **THEN** the response is 409
 
+#### Scenario: Deactivated member
+
+- **WHEN** an Admin invites the email of a deactivated member
+
+- **THEN** the response is 409 and the message says to reactivate that person from People
+
 #### Scenario: Re-invite after expiry
 - **WHEN** an invitation has expired and an Admin invites the same email
 - **THEN** a new pending invitation is created
 
 ### Requirement: Delivery by email and a one-time link
-The system SHALL send each invitation by email through the background queue and SHALL return a copyable link once, in the response to the person who created it. The link SHALL NOT appear in any list response or log. The system SHALL store only a hash of the token.
+The system SHALL send each invitation by email through the background queue and SHALL return a copyable link once, in the response to the person who created it. The link SHALL NOT appear in any list response or log. The system SHALL store only a hash of the token in the database. The link SHALL be held only in the queued email job, which is removed when the send succeeds and at most 24 hours after it last fails.
 
 #### Scenario: Link returned once
 - **WHEN** an Admin creates an invitation
@@ -94,8 +100,14 @@ The system SHALL let a signed-in person with a verified email equal (ignoring ca
 - **THEN** the response is 404 with one message for all four cases
 
 #### Scenario: Accepted twice
-- **WHEN** the same person accepts again, or two accepts arrive at the same time
-- **THEN** exactly one Membership exists and no second one is created
+- **WHEN** the same person accepts again while their Membership is active, or two accepts arrive at the same time
+- **THEN** exactly one Membership exists and no second one is created, and the repeat call returns 200
+
+#### Scenario: Accepted twice after deactivation
+
+- **WHEN** the same person re-opens an accepted link after an Admin deactivated their Membership
+
+- **THEN** the response is 409 saying to ask an Admin to reactivate them
 
 #### Scenario: Unverified email
 
