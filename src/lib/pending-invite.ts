@@ -5,6 +5,8 @@
  * parameter or a log. The storage is injected so this stays plain and testable.
  */
 
+import { CODE_INVITE_EMAIL_MISMATCH } from "./api-types.ts";
+
 export const PENDING_INVITE_KEY = "reportlee.pendingInvite";
 
 export type KeyValueStore = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -43,6 +45,17 @@ export function clearPendingInvite(store: KeyValueStore): void {
   } catch {
     /* see above */
   }
+}
+
+/* @info - Not found, expired, revoked, already used and wrong account can never
+   succeed on a retry. The remembered token must go with them, or the dashboard
+   shell sends the visitor back to the same dead invitation on every load. */
+export function isTerminalInviteError(
+  status: number,
+  code: string | undefined,
+): boolean {
+  if (status === 404 || status === 409) return true;
+  return status === 403 && code === CODE_INVITE_EMAIL_MISMATCH;
 }
 
 /**

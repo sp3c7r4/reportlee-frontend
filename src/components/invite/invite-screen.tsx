@@ -18,6 +18,7 @@ import { acceptInvitation, previewInvitation } from "@/lib/invitations";
 import {
   clearPendingInvite,
   isInviteToken,
+  isTerminalInviteError,
   setPendingInvite,
 } from "@/lib/pending-invite";
 
@@ -68,8 +69,10 @@ export function InviteScreen({ token }: { token: string }) {
         setView({ state: "signedOut" });
         return;
       }
-      if (result.status === 404) {
+      if (isTerminalInviteError(result.status, result.code)) {
         clearPendingInvite(window.sessionStorage);
+      }
+      if (result.status === 404) {
         setView({ state: "invalid" });
         return;
       }
@@ -101,13 +104,14 @@ export function InviteScreen({ token }: { token: string }) {
       router.replace("/dashboard");
       return;
     }
-    if (result.status === 404) {
+    if (isTerminalInviteError(result.status, result.code)) {
       clearPendingInvite(window.sessionStorage);
+    }
+    if (result.status === 404) {
       setView({ state: "invalid" });
       return;
     }
     if (result.status === 409) {
-      clearPendingInvite(window.sessionStorage);
       setView({ state: "conflict", message: result.message });
       return;
     }
@@ -221,14 +225,22 @@ export function InviteScreen({ token }: { token: string }) {
               <p className="text-[15px] text-muted-foreground">
                 {view.message}
               </p>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void switchAccount()}
-                className="h-12 w-fit rounded-4xl px-6"
-              >
-                Sign out and use another account
-              </Button>
+              <p className="text-[13.5px] text-muted-foreground">
+                Sign in with the email address this invitation was sent to.
+              </p>
+              <div className="flex flex-wrap items-center gap-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void switchAccount()}
+                  className="h-12 w-fit rounded-4xl px-6"
+                >
+                  Sign out and use another account
+                </Button>
+                <Link href="/dashboard" className="text-[14px] underline">
+                  Go to your dashboard
+                </Link>
+              </div>
             </div>
           ) : null}
 
