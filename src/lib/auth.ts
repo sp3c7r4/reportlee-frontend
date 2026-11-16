@@ -13,11 +13,14 @@
  */
 
 import {
-  extractError,
-  isAccessExpired,
-  toFrontendRole,
-  unwrapEnvelope,
-} from "./auth-contract.ts";
+  API_BASE,
+  authed,
+  type Call,
+  type Failure,
+  type FieldErrors,
+  request,
+} from "./api.ts";
+import { toFrontendRole } from "./auth-contract.ts";
 import {
   simulateMe,
   simulateRequestCode,
@@ -33,7 +36,6 @@ import type { AuthFlow } from "./otp.ts";
 import { readFlow, writeFlow } from "./session.ts";
 import {
   clearTokens,
-  getAccessToken,
   getRefreshToken,
   hasTokens,
   setTokens,
@@ -43,16 +45,7 @@ import {
    run the screens with no backend; nothing else changes. */
 export const SIMULATED_AUTH = false;
 
-/**
- * The base URL is read at build time so a deployed frontend can point at its own
- * environment without a code change.
- */
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api/v1";
-
-export type FieldErrors = Record<string, string>;
-
-type Failure = { ok: false; message: string; fieldErrors?: FieldErrors };
+export type { FieldErrors };
 
 export type AuthResult = { ok: true; greeting?: string; role?: Role } | Failure;
 
@@ -75,56 +68,6 @@ type ApiUser = {
 };
 
 type TokenPair = { accessToken?: string; refreshToken?: string };
-
-const UNREACHABLE =
-  "We could not reach the server. Check your connection and try again.";
-
-type Call<T> =
-  | { ok: true; data: T; status: number }
-  | (Failure & { status: number });
-
-/**
- * One request against the API. Success unwraps `{ success, data }`; failure reads
- * either `error.message` or the validation field map.
- */
-async function request<T>(
-  method: "GET" | "POST",
-  path: string,
-  body: unknown,
-  fallback: string,
-  bearer?: string | null,
-): Promise<Call<T>> {
-  try {
-    const response = await fetch(`${API_BASE}${path}`, {
-      method,
-      headers: {
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-        ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-
-    const payload: unknown = await response.json().catch(() => null);
-
-    if (response.ok) {
-      return {
-        ok: true,
-        data: unwrapEnvelope<T>(payload) as T,
-        status: response.status,
-      };
-    }
-
-    const { message, fieldErrors } = extractError(payload, fallback);
-    return {
-      ok: false,
-      message,
-      ...(Object.keys(fieldErrors).length > 0 ? { fieldErrors } : {}),
-      status: response.status,
-    };
-  } catch {
-    return { ok: false, message: UNREACHABLE, status: 0 };
-  }
-}
 
 /** Drops the transport status, so callers keep the documented result shape. */
 function settle<T>(call: Call<T>): AuthActionResult<T> {
@@ -170,41 +113,6 @@ export function refreshSession(): Promise<boolean> {
   });
 
   return refreshing;
-}
-
-/**
- * A call carrying the access token. A 401 means it expired, so the pair is
- * refreshed once and the call retried once.
- */
-async function authed<T>(
-  method: "GET" | "POST",
-  path: string,
-  body: unknown | (() => unknown),
-  fallback: string,
-): Promise<Call<T>> {
-  /* @info - a body function is read per attempt, so a retry sees rotated tokens. */
-  const read = () => (typeof body === "function" ? body() : body);
-  const first = await request<T>(
-    method,
-    path,
-    read(),
-    fallback,
-    getAccessToken(),
-  );
-  if (first.ok || !isAccessExpired(first.status)) return first;
-
-  const renewed = await refreshSession();
-  if (!renewed) return first;
-
-  const second = await request<T>(
-    method,
-    path,
-    read(),
-    fallback,
-    getAccessToken(),
-  );
-  if (!second.ok && isAccessExpired(second.status)) clearTokens();
-  return second;
 }
 
 function storePair(pair: TokenPair | undefined): void {

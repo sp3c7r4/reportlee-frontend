@@ -45,6 +45,8 @@ export type Membership = {
   role: Role;
   /** The Space this Membership belongs to. A Workspace Admin belongs to none. */
   space: string | null;
+  /** The id of that Space, when the API sent it. */
+  spaceId?: string | null;
 };
 
 export const WORKSPACES: Workspace[] = [
