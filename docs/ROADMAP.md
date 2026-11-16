@@ -30,6 +30,7 @@ OpenSpec changes under `openspec/changes/`; there is no other spec location.
 | earlier | Landing page: hero, features, how it works, pricing, testimonials, FAQ, footer | browser |
 | earlier | Auth screens: sign in, OTP, sign up, verify (3 flows), forgot and reset password. Simulated, no backend | browser |
 | earlier | Onboarding: Workspace, Spaces, Team steps. Local state only, nothing is saved | browser |
+| 2026-11-16 | workspaces-people: Workspaces, Spaces, People roster and invitations on the real API, invite page with return after login | tsc + tests + API (90/90 live HTTP checks); browser pass not done |
 
 ## In progress
 
@@ -87,6 +88,16 @@ Nothing. Every UI task from UI-1 to UI-17 and the ai-drafting change is built; `
 - The onboarding invite step offers Staff and Admin only. A Head of Space needs a Space, so that picker is part of UI-4 and UI-5.
 - workspaces-people (P10): no limit on Workspaces per user or on invitation emails. Unlimited invite emails could get the owner's Gmail sender (about 500 a day) suspended. Proposed cap if wanted: 5 Workspaces per user and 20 invitation emails per Workspace per hour.
 - workspaces-people: the backend's `redactLog` does not mask `email`, so Zod request logging can print invited addresses. Adding `email` to `SENSITIVE_KEYS` changes existing log output, so it needs its own approval.
+- workspaces-people: `AGENTS.md` is stale. It says the backend does not exist, that the Drizzle journal stops at 0004 and that there is no local stack. The backend and `0001_workspaces_people.sql` now exist. Update those notes.
+- workspaces-people: `src/data/members.ts` is marked generated but its generator is missing.
+- workspaces-people: the member roster has no pagination.
+- workspaces-people: no way to resend an invitation; revoke and invite again.
+- workspaces-people: onboarding has no Head picker.
+- workspaces-people: Super Admin plan limits are not built.
+- workspaces-people: a last Admin can delete their own account (D22).
+- workspaces-people: older backend routes still log full responses through `sendSuccessResponse`; new routes opt out with `{ log: false }`.
+- workspaces-people: add a `.gitattributes` for backend migrations. A Windows CRLF checkout changes the file hash that `app/migrate.ts` records, so an applied migration would run again once.
+- workspaces-people: invitation emails have no rate limit, so a burst could get the Gmail sender suspended (see P10 above).
 
 ## Not v1
 
