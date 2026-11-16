@@ -43,3 +43,5 @@ Change 'workspaces-people' is valid
 ```
 
 Build validation sections for the backend and the frontend are filled in at Gate 3 (tasks 1.8 and 2.6).
+
+Approval record: 2026-11-16, owner (pre-approved via orchestrator) approved design direction, defaults P1 to P9, P2, P9 and no rate limits (P10); no new owner-level decision after spec fix round 3. Open design-review-2 items are NITs only.
