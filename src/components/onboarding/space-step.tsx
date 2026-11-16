@@ -7,6 +7,10 @@ import { SPACE_LIMIT } from "@/lib/onboarding";
 
 type SpaceStepProps = {
   rows: string[];
+  /** The message the server gave for a row, shown beside it. */
+  errors: Record<number, string>;
+  /** Rows already created, which stay as they are on a retry. */
+  created: readonly number[];
   onRow: (index: number, value: string) => void;
   onAdd: () => void;
   onRemove: (index: number) => void;
@@ -17,7 +21,14 @@ type SpaceStepProps = {
  * row is a text link rather than a button so it never competes with Continue, and
  * removal only appears once there is something to remove.
  */
-export function SpaceStep({ rows, onRow, onAdd, onRemove }: SpaceStepProps) {
+export function SpaceStep({
+  rows,
+  errors,
+  created,
+  onRow,
+  onAdd,
+  onRemove,
+}: SpaceStepProps) {
   return (
     <>
       {rows.map((value, index) => (
@@ -30,16 +41,23 @@ export function SpaceStep({ rows, onRow, onAdd, onRemove }: SpaceStepProps) {
               placeholder={index === 0 ? "Engineering" : "Design"}
               value={value}
               onChange={(event) => onRow(index, event.target.value)}
+              disabled={created.includes(index)}
+              error={errors[index]}
+              hint={created.includes(index) ? "Created" : undefined}
             />
           </div>
-          {index > 0 ? (
+          {index > 0 && !created.includes(index) ? (
             <button
               type="button"
               onClick={() => onRemove(index)}
               aria-label={`Remove Space ${index + 1}`}
               className="mb-[1px] grid size-11 shrink-0 place-items-center rounded-[12px] text-muted-foreground transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink/50"
             >
-              <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.8} className="size-[18px]" />
+              <HugeiconsIcon
+                icon={Delete02Icon}
+                strokeWidth={1.8}
+                className="size-[18px]"
+              />
             </button>
           ) : null}
         </div>

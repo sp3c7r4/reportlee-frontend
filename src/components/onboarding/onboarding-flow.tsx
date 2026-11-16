@@ -1,38 +1,53 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { AuthSubmit } from "@/components/auth/auth-submit";
-import { type InviteRow, InviteStep } from "@/components/onboarding/invite-step";
+import { FormAlert } from "@/components/auth/form-alert";
+import {
+  type InviteRow,
+  InviteStep,
+} from "@/components/onboarding/invite-step";
 import { SpaceStep } from "@/components/onboarding/space-step";
 import { StepIndicator } from "@/components/onboarding/step-indicator";
+import { useWorkspaceForm } from "@/components/onboarding/use-workspace-form";
 import { WorkspaceStep } from "@/components/onboarding/workspace-step";
+import { Button } from "@/components/ui/button";
+import type { CreatedInvitation } from "@/lib/api-types";
+import { hasLiveSession, SIMULATED_AUTH } from "@/lib/auth";
 import { gsap, MOTION_OK, useGSAP } from "@/lib/gsap";
+import { createInvitations } from "@/lib/invitations";
 import {
-  canEnterOnboarding,
-  cleanRows,
   invalidInviteIndexes,
-  isReservedSlug,
+  inviteFailure,
   nextStep,
   type OnboardingStepId,
   previousStep,
   STEPS,
-  slugify,
+  spaceFailureMessage,
   stepFromParam,
 } from "@/lib/onboarding";
 import { readSession } from "@/lib/session";
+import { createSpace, listSpaces } from "@/lib/spaces-api";
+import { getMemberships } from "@/lib/workspaces";
 
 type OnboardingFlowProps = {
   /** From the address, already the only thing the URL is allowed to carry. */
   initialStep?: string;
 };
 
+type Entry = "loading" | "error" | "ready";
+
+const EMPTY_INVITE: InviteRow = { email: "", role: "staff", spaceId: "" };
+
 /**
  * The first-run flow: three steps, one route, the step in the address.
  *
- * Values stay in this component for the length of the visit. Nothing is stored
- * and nothing is sent, which is why no step claims anything was created, and why
- * the only thing worth surviving a reload is the step itself.
+ * The Workspace, its Spaces and the invitations are created through the API, one
+ * call per step. A Space that was created stays created: a retry after a later row
+ * failed sends only the rows that are left. The only things that survive a reload
+ * are the step in the address and what the server already holds.
  *
  * The step change is the one authored moment on this surface: the incoming step
  * rises, its heading and fields follow in sequence, and the progress line grows to
@@ -45,18 +60,97 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps) {
   const panel = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
 
-  const [stepId, setStepId] = useState<OnboardingStepId>(() => stepFromParam(initialStep).id);
+  const [stepId, setStepId] = useState<OnboardingStepId>(
+    () => stepFromParam(initialStep).id,
+  );
   const step = stepFromParam(stepId);
-  const [allowed, setAllowed] = useState(false);
+  const [entry, setEntry] = useState<Entry>("loading");
+  /* @info - The Workspace the Spaces and invitations go into: the one just created, or
+     the last one when the person returns here, and only when they are its Admin. */
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 
-  const [orgName, setOrgName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [slugTouched, setSlugTouched] = useState(false);
+  const form = useWorkspaceForm();
   const [spaces, setSpaces] = useState<string[]>([""]);
-  const [invites, setInvites] = useState<InviteRow[]>([{ email: "", role: "staff" }]);
-  const [orgError, setOrgError] = useState<string | undefined>();
-  const [slugError, setSlugError] = useState<string | undefined>();
+  const [createdRows, setCreatedRows] = useState<number[]>([]);
+  const [spaceErrors, setSpaceErrors] = useState<Record<number, string>>({});
+  const [spaceOptions, setSpaceOptions] = useState<
+    { id: string; name: string }[]
+  >([]);
+  const [invites, setInvites] = useState<InviteRow[]>([EMPTY_INVITE]);
   const [invalidInvites, setInvalidInvites] = useState<number[]>([]);
+  const [inviteErrors, setInviteErrors] = useState<Record<number, string>>({});
+  const [sent, setSent] = useState<Record<number, CreatedInvitation> | null>(
+    null,
+  );
+  const [pending, setPending] = useState(false);
+  const [formError, setFormError] = useState<string | undefined>();
+
+  /* @info - Convenience only: a visit with no session goes to sign in, and the server
+     refuses every write anyway. Anyone signed in may create a Workspace, so the
+     platform role plays no part here. The Memberships say which Workspace a return
+     visit to the Spaces or Team step belongs to. */
+  function enter() {
+    if (SIMULATED_AUTH ? !readSession() : !hasLiveSession()) {
+      router.replace("/login");
+      return;
+    }
+    setEntry("loading");
+    void getMemberships().then((result) => {
+      if (!result.ok) {
+        if (result.status === 401 && !hasLiveSession()) {
+          router.replace("/login");
+          return;
+        }
+        setEntry("error");
+        return;
+      }
+      const { memberships, lastWorkspaceId } = result.data;
+      const admin =
+        memberships.find(
+          (entryRow) =>
+            entryRow.workspaceId === lastWorkspaceId &&
+            entryRow.role === "admin",
+        ) ?? memberships.find((entryRow) => entryRow.role === "admin");
+      if (admin) setWorkspaceId(admin.workspaceId);
+      setEntry("ready");
+    });
+  }
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs once on arrival
+  useEffect(enter, []);
+
+  const allowed = entry === "ready";
+
+  // A Space or Team step with no Workspace to put things in starts at the first step.
+  useEffect(() => {
+    if (allowed && !workspaceId && step.id !== "workspace") {
+      setStepId("workspace");
+      router.replace("/onboarding?step=workspace", { scroll: false });
+    }
+  }, [allowed, workspaceId, step.id, router]);
+
+  // The Team step offers the Workspace's own Spaces to a Staff invitation.
+  useEffect(() => {
+    if (!allowed || !workspaceId || step.id !== "team") return;
+    let cancelled = false;
+    void listSpaces(workspaceId).then((result) => {
+      if (cancelled || !result.ok) return;
+      const open = result.data
+        .filter((space) => !space.archived)
+        .map((space) => ({ id: space.id, name: space.name }));
+      setSpaceOptions(open);
+      setInvites((rows) =>
+        rows.map((row) =>
+          row.spaceId || open.length === 0
+            ? row
+            : { ...row, spaceId: open[0].id },
+        ),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [allowed, workspaceId, step.id]);
 
   // The heading of a new step takes focus, so the flow is walkable by keyboard
   // without hunting for where the content moved to.
@@ -64,43 +158,45 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps) {
     if (allowed) heading.current?.focus();
   }, [allowed]);
 
-  /* @info - Convenience only: sends a non-admin away from workspace setup. The server
-     guards every write. The form stays unrendered until the check has passed. */
-  useEffect(() => {
-    if (canEnterOnboarding(readSession()?.role)) {
-      setAllowed(true);
-    } else {
-      router.replace("/dashboard");
-    }
-  }, [router]);
-
   useGSAP(
     () => {
       const mm = gsap.matchMedia();
       mm.add(MOTION_OK, () => {
         const fields = gsap.utils.toArray<HTMLElement>("[data-step-field]");
-        const line = root.current?.querySelector<HTMLElement>("[data-progress-line]");
+        const line = root.current?.querySelector<HTMLElement>(
+          "[data-progress-line]",
+        );
         const timeline = gsap.timeline();
 
         timeline.fromTo(
           panel.current,
           { opacity: 0, y: 16 },
-          { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" }
+          { opacity: 1, y: 0, duration: 0.55, ease: "power3.out" },
         );
         if (fields.length > 0) {
           timeline.fromTo(
             fields,
             { opacity: 0, y: 12 },
-            { opacity: 1, y: 0, duration: 0.45, stagger: 0.045, ease: "power3.out" },
-            "-=0.38"
+            {
+              opacity: 1,
+              y: 0,
+              duration: 0.45,
+              stagger: 0.045,
+              ease: "power3.out",
+            },
+            "-=0.38",
           );
         }
         if (line) {
           timeline.fromTo(
             line,
             { scaleX: Math.max(0.18, step.index / STEPS.length) },
-            { scaleX: (step.index + 1) / STEPS.length, duration: 0.5, ease: "power3.out" },
-            0
+            {
+              scaleX: (step.index + 1) / STEPS.length,
+              duration: 0.5,
+              ease: "power3.out",
+            },
+            0,
           );
         }
 
@@ -110,11 +206,12 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps) {
       });
       return () => mm.revert();
     },
-    { dependencies: [step.id, allowed], scope: root, revertOnUpdate: true }
+    { dependencies: [step.id, allowed], scope: root, revertOnUpdate: true },
   );
 
   function goTo(id: OnboardingStepId) {
     setStepId(id);
+    setFormError(undefined);
     router.replace(`/onboarding?step=${id}`, { scroll: false });
   }
 
@@ -127,41 +224,126 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps) {
     goTo(next.id);
   }
 
-  function handleSubmit() {
-    if (step.id === "workspace") {
-      const name = orgName.trim();
-      const address = slugify(slug);
-      setOrgError(name ? undefined : "Give your workspace a name to continue.");
-      setSlugError(
-        !address
-          ? "Add a letter or a number so the address is not empty."
-          : isReservedSlug(address)
-            ? "That address is reserved. Choose another name."
-            : undefined
+  async function submitSpaces(id: string) {
+    const rows = spaces.map((row) => row.trim());
+    if (rows.every((row) => row === "")) {
+      setFormError("Add at least one Space to continue.");
+      return;
+    }
+    setPending(true);
+    const errors: Record<number, string> = {};
+    const created = [...createdRows];
+    for (let index = 0; index < rows.length; index += 1) {
+      if (rows[index] === "" || created.includes(index)) continue;
+      const result = await createSpace(id, rows[index]);
+      if (!result.ok) {
+        errors[index] = spaceFailureMessage(result);
+        break;
+      }
+      created.push(index);
+    }
+    setPending(false);
+    setCreatedRows(created);
+    setSpaceErrors(errors);
+    if (Object.keys(errors).length === 0) advance();
+  }
+
+  async function submitTeam(id: string) {
+    if (sent) {
+      advance();
+      return;
+    }
+    const rejected = invalidInviteIndexes(invites);
+    setInvalidInvites(rejected);
+    setInviteErrors({});
+    if (rejected.length > 0) return;
+
+    const filled = invites
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => row.email.trim() !== "");
+    if (filled.length === 0) {
+      advance();
+      return;
+    }
+    const missing = filled.find(
+      ({ row }) => row.role === "staff" && !row.spaceId,
+    );
+    if (missing) {
+      setFormError("Add a Space first, so Staff have somewhere to join.");
+      return;
+    }
+
+    setPending(true);
+    const result = await createInvitations(
+      id,
+      filled.map(({ row }) => ({
+        email: row.email.trim(),
+        role: row.role,
+        ...(row.role === "staff" ? { spaceId: row.spaceId } : {}),
+      })),
+    );
+    setPending(false);
+    if (!result.ok) {
+      const { rows, form: message } = inviteFailure(
+        result,
+        filled.map(({ index }) => index),
       );
-      if (!name || !address || isReservedSlug(address)) return;
-      setSlug(address);
+      setInviteErrors(rows);
+      setFormError(message);
+      return;
     }
+    setSent(
+      Object.fromEntries(
+        filled.map(({ index }, position) => [index, result.data[position]]),
+      ),
+    );
+  }
 
+  async function handleSubmit() {
+    if (pending || form.submitting) return;
+    setFormError(undefined);
+
+    if (step.id === "workspace") {
+      const created = await form.submit();
+      if (!created) return;
+      setWorkspaceId(created.workspace.id);
+      advance();
+      return;
+    }
+    if (!workspaceId) return;
     if (step.id === "spaces") {
-      setSpaces((rows) => {
-        const cleaned = cleanRows(rows);
-        return cleaned.length > 0 ? cleaned : rows;
-      });
+      await submitSpaces(workspaceId);
+      return;
     }
-
-    if (step.id === "team") {
-      const rejected = invalidInviteIndexes(invites);
-      setInvalidInvites(rejected);
-      if (rejected.length > 0) return;
-    }
-
-    advance();
+    await submitTeam(workspaceId);
   }
 
   const previous = previousStep(step);
 
-  if (!allowed) return null;
+  if (entry === "error") {
+    return (
+      <div role="alert" className="flex flex-col items-start gap-3">
+        <p className="font-semibold text-[17px] text-ink">
+          We could not load your account.
+        </p>
+        <Button type="button" onClick={enter}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  if (!allowed) {
+    return (
+      <div aria-busy="true" className="flex flex-col gap-4">
+        <div className="h-6 w-40 animate-pulse rounded-lg bg-surface-muted" />
+        <div className="h-11 animate-pulse rounded-xl bg-surface-muted" />
+        <div className="h-11 animate-pulse rounded-xl bg-surface-muted" />
+      </div>
+    );
+  }
+
+  const teamSent = step.id === "team" && sent !== null;
 
   return (
     <div ref={root} className="flex flex-col gap-8">
@@ -170,7 +352,7 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps) {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          handleSubmit();
+          void handleSubmit();
         }}
         noValidate
         className="flex flex-col gap-8"
@@ -184,36 +366,30 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps) {
             >
               {step.heading}
             </h1>
-            <p className="text-[15px] text-muted-foreground leading-[1.6]">{step.supporting}</p>
+            <p className="text-[15px] text-muted-foreground leading-[1.6]">
+              {step.supporting}
+            </p>
           </div>
 
           {step.id === "workspace" ? (
             <div data-step-field className="flex flex-col gap-6">
               <WorkspaceStep
-                orgName={orgName}
-                slug={slug}
-                slugTouched={slugTouched}
-                error={orgError}
-                onOrgName={(value) => {
-                  setOrgName(value);
-                  setOrgError(undefined);
-                  if (!slugTouched) {
-                    const derived = slugify(value);
-                    setSlug(derived);
-                    if (derived && !isReservedSlug(derived)) setSlugError(undefined);
-                  }
-                }}
-                onSlug={(value) => {
-                  const next = slugify(value);
-                  setSlug(next);
-                  setSlugTouched(true);
-                  if (!isReservedSlug(next)) setSlugError(undefined);
-                }}
+                orgName={form.name}
+                slug={form.slug}
+                slugTouched={form.slugTouched}
+                slugStatus={form.status}
+                nameError={form.errors.name}
+                slugError={form.errors.slug}
+                onOrgName={form.onName}
+                onSlug={form.onSlug}
               />
-              {slugError ? (
-                <p role="alert" className="-mt-3 text-[13px] text-destructive">
-                  {slugError}
-                </p>
+              {form.errors.form ? (
+                <FormAlert message={form.errors.form} />
+              ) : null}
+              {form.errors.verifyEmail ? (
+                <Link href="/verify" className="text-[13px] underline">
+                  Verify your email
+                </Link>
               ) : null}
             </div>
           ) : null}
@@ -222,11 +398,23 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps) {
             <div data-step-field className="flex flex-col gap-6">
               <SpaceStep
                 rows={spaces}
+                errors={spaceErrors}
+                created={createdRows}
                 onRow={(index, value) =>
-                  setSpaces((rows) => rows.map((row, i) => (i === index ? value : row)))
+                  setSpaces((rows) =>
+                    rows.map((row, i) => (i === index ? value : row)),
+                  )
                 }
                 onAdd={() => setSpaces((rows) => [...rows, ""])}
-                onRemove={(index) => setSpaces((rows) => rows.filter((_, i) => i !== index))}
+                onRemove={(index) => {
+                  setSpaces((rows) => rows.filter((_, i) => i !== index));
+                  setCreatedRows((done) =>
+                    done
+                      .filter((row) => row !== index)
+                      .map((row) => (row > index ? row - 1 : row)),
+                  );
+                  setSpaceErrors({});
+                }}
               />
             </div>
           ) : null}
@@ -235,24 +423,46 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps) {
             <div data-step-field className="flex flex-col gap-6">
               <InviteStep
                 rows={invites}
+                spaces={spaceOptions}
                 invalid={invalidInvites}
+                errors={inviteErrors}
+                sent={sent}
                 onRow={(index, patch) =>
                   setInvites((rows) =>
-                    rows.map((row, i) => (i === index ? { ...row, ...patch } : row))
+                    rows.map((row, i) =>
+                      i === index ? { ...row, ...patch } : row,
+                    ),
                   )
                 }
-                onAdd={() => setInvites((rows) => [...rows, { email: "", role: "staff" }])}
-                onRemove={(index) => setInvites((rows) => rows.filter((_, i) => i !== index))}
+                onAdd={() =>
+                  setInvites((rows) => [
+                    ...rows,
+                    { ...EMPTY_INVITE, spaceId: spaceOptions[0]?.id ?? "" },
+                  ])
+                }
+                onRemove={(index) =>
+                  setInvites((rows) => rows.filter((_, i) => i !== index))
+                }
               />
             </div>
+          ) : null}
+
+          {formError && step.id !== "workspace" ? (
+            <FormAlert message={formError} />
           ) : null}
         </div>
 
         <div className="flex flex-col gap-3">
-          <AuthSubmit label={step.continueLabel} pendingLabel="Working" pending={false} />
+          <AuthSubmit
+            label={teamSent ? "Go to dashboard" : step.continueLabel}
+            pendingLabel="Working"
+            pending={pending || form.submitting}
+          />
 
           <div className="flex items-center justify-between gap-4">
-            {previous ? (
+            {previous &&
+            !teamSent &&
+            !(previous.id === "workspace" && workspaceId) ? (
               <button
                 type="button"
                 onClick={() => goTo(previous.id)}
@@ -264,7 +474,7 @@ export function OnboardingFlow({ initialStep }: OnboardingFlowProps) {
               <span />
             )}
 
-            {step.skippable ? (
+            {step.skippable && !teamSent && workspaceId ? (
               <button
                 type="button"
                 onClick={advance}

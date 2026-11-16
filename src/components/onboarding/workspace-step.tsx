@@ -1,26 +1,42 @@
 "use client";
 
 import { AuthField } from "@/components/auth/auth-field";
-import { SLUG_DOMAIN } from "@/lib/onboarding";
+import { SLUG_DOMAIN, type SlugStatus } from "@/lib/onboarding";
 
 type WorkspaceStepProps = {
   orgName: string;
   slug: string;
   /** True once the user has edited the slug, after which the name stops rewriting it. */
   slugTouched: boolean;
-  error?: string;
+  slugStatus: SlugStatus;
+  /** The server's word on the name or the address, shown beside the field. */
+  nameError?: string;
+  slugError?: string;
   onOrgName: (value: string) => void;
   onSlug: (value: string) => void;
 };
+
+function slugHint(status: SlugStatus, touched: boolean): string | undefined {
+  if (status.state === "checking") return "Checking";
+  if (status.state === "available") return "Available";
+  return touched
+    ? "You set this, so it no longer follows the name."
+    : undefined;
+}
 
 export function WorkspaceStep({
   orgName,
   slug,
   slugTouched,
-  error,
+  slugStatus,
+  nameError,
+  slugError,
   onOrgName,
   onSlug,
 }: WorkspaceStepProps) {
+  const unavailable =
+    slugStatus.state === "unavailable" ? slugStatus.message : undefined;
+
   return (
     <>
       <AuthField
@@ -30,7 +46,7 @@ export function WorkspaceStep({
         placeholder="Arthurite Integrated Group"
         value={orgName}
         onChange={(event) => onOrgName(event.target.value)}
-        error={error}
+        error={nameError}
       />
 
       <AuthField
@@ -39,7 +55,8 @@ export function WorkspaceStep({
         placeholder="arthurite"
         value={slug}
         onChange={(event) => onSlug(event.target.value)}
-        hint={slugTouched ? "You set this, so it no longer follows the name." : undefined}
+        hint={slugHint(slugStatus, slugTouched)}
+        error={slugError ?? unavailable}
         suffix={`.${SLUG_DOMAIN}`}
       />
     </>

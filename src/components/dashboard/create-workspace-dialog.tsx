@@ -1,6 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { AuthSubmit } from "@/components/auth/auth-submit";
+import { FormAlert } from "@/components/auth/form-alert";
+import { useWorkspaceForm } from "@/components/onboarding/use-workspace-form";
+import { WorkspaceStep } from "@/components/onboarding/workspace-step";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,15 +15,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { isReservedSlug, SLUG_DOMAIN, slugify } from "@/lib/onboarding";
 import { useShell } from "./shell-context";
 
 /**
- * Create workspace, simulated. It validates like the real thing so the field states
- * can be seen, and it stores nothing: there is no backend, and pretending otherwise
- * would be a lie the next screen inherits.
+ * Create workspace. The same two fields and the same calls as the first-run step.
+ * On success the new Workspace becomes the active one and the person goes on to add
+ * its Spaces.
  */
 export function CreateWorkspaceDialog({
   open,
@@ -27,27 +29,17 @@ export function CreateWorkspaceDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { portalContainer } = useShell();
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [previewed, setPreviewed] = useState(false);
+  const router = useRouter();
+  const { portalContainer, addWorkspace } = useShell();
+  const form = useWorkspaceForm();
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const candidate = slugify(slug || name);
-
-    if (!candidate) {
-      setError("Enter a name or a URL.");
-      return;
-    }
-    if (isReservedSlug(candidate)) {
-      setError("That address is used by Reportlee itself. Choose another.");
-      return;
-    }
-
-    setError(null);
-    setPreviewed(true);
+    const created = await form.submit();
+    if (!created) return;
+    addWorkspace(created.workspace, created.membership);
+    onOpenChange(false);
+    router.push("/onboarding?step=spaces");
   }
 
   return (
@@ -56,55 +48,32 @@ export function CreateWorkspaceDialog({
         <DialogHeader>
           <DialogTitle>Create workspace</DialogTitle>
           <DialogDescription>
-            A name and an address, nothing else. This is a preview: nothing is
-            created or saved.
+            A name and an address, nothing else. You will be its Admin.
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="workspace-name">Name</Label>
-            <Input
-              id="workspace-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Arthurite Integrated Group"
-              autoComplete="off"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="workspace-url">Workspace URL</Label>
-            <div className="flex items-center gap-1.5">
-              <Input
-                id="workspace-url"
-                value={slug}
-                onChange={(event) => setSlug(event.target.value)}
-                placeholder="arthurite"
-                autoComplete="off"
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? "workspace-url-error" : undefined}
-              />
-              <span className="text-[12.5px] text-ink/45">.{SLUG_DOMAIN}</span>
-            </div>
-            {error ? (
-              <p
-                id="workspace-url-error"
-                className="text-[12.5px] text-destructive"
-              >
-                {error}
-              </p>
-            ) : null}
-          </div>
+          <WorkspaceStep
+            orgName={form.name}
+            slug={form.slug}
+            slugTouched={form.slugTouched}
+            slugStatus={form.status}
+            nameError={form.errors.name}
+            slugError={form.errors.slug}
+            onOrgName={form.onName}
+            onSlug={form.onSlug}
+          />
 
           <p className="rounded-xl bg-surface-muted p-3 text-[12px] text-ink/60 leading-[1.5]">
-            30 days of Team features, then Starter. The workspace URL is fixed
-            once created.
+            The workspace URL is fixed once created.
           </p>
 
-          <output className="text-[12.5px] text-ink/60">
-            {previewed ? "Preview only: nothing was created." : ""}
-          </output>
+          {form.errors.form ? <FormAlert message={form.errors.form} /> : null}
+          {form.errors.verifyEmail ? (
+            <Link href="/verify" className="text-[13px] underline">
+              Verify your email
+            </Link>
+          ) : null}
 
           <DialogFooter>
             <Button
@@ -114,7 +83,13 @@ export function CreateWorkspaceDialog({
             >
               Cancel
             </Button>
-            <Button type="submit">Create workspace</Button>
+            <div className="min-w-40">
+              <AuthSubmit
+                label="Create workspace"
+                pendingLabel="Creating"
+                pending={form.submitting}
+              />
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>
