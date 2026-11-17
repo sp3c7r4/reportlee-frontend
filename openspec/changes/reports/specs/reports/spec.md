@@ -28,6 +28,12 @@ The system SHALL keep at most one live report per person per period. Saving SHAL
 #### Scenario: Reading a draft
 - **WHEN** a person asks for their draft of a period and none exists
 - **THEN** the answer is an empty result, not an error
+#### Scenario: Draft after submit
+- **WHEN** a person asks for their draft of a period they already submitted
+- **THEN** the answer is an empty result, and the submitted report is found in their list of reports for that period
+#### Scenario: No Space
+- **WHEN** a Staff member who belongs to no Space asks for or saves a draft
+- **THEN** the response is 409 with the code NO_SPACE
 
 ### Requirement: KPI rows are copied when the draft starts
 The system SHALL copy the Space's KPI template into a report when its draft is first created, with no value. Later changes to the template SHALL NOT alter the report. A blank value SHALL mean "not provided", never zero. A save SHALL change only the values of the rows the report already has.
@@ -55,6 +61,9 @@ The system SHALL submit a draft by marking it submitted, or late when the moment
 #### Scenario: Too short
 - **WHEN** a person submits with fewer than 50 characters of accomplishments
 - **THEN** the response is 400 with a message beside the accomplishments field
+#### Scenario: Several problems at once
+- **WHEN** a request breaks more than one rule
+- **THEN** the first rule in this order answers: not found, not the author, Admin, read-only Workspace, already submitted, period closed, content too short
 #### Scenario: Second submit
 - **WHEN** a person submits a report that is already submitted
 - **THEN** the response is 409 with the code ALREADY_SUBMITTED and nothing changes

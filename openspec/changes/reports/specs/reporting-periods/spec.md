@@ -9,7 +9,7 @@ The system SHALL generate each period from the Schedule in force when the period
 - **THEN** the week of Monday 19 October 2026 starts 19 October 00:00, ends Sunday 25 October 23:59:59 and is due Monday 26 October 17:00, local time
 #### Scenario: Fortnightly
 - **WHEN** the Schedule is fortnightly
-- **THEN** consecutive periods start 14 days apart
+- **THEN** after the first period of a Schedule version, consecutive periods start 14 days apart
 #### Scenario: Monthly with a short month
 - **WHEN** the Schedule is monthly on day 31
 - **THEN** a month with fewer days starts on its last day
@@ -24,15 +24,24 @@ The system SHALL generate each period from the Schedule in force when the period
 - **THEN** the deadline is still 17:00 local time on its date and the period is one hour longer than 168 hours
 #### Scenario: Local time that does not exist
 - **WHEN** a boundary or deadline falls on a local time skipped by a clock change
-- **THEN** it moves to the first valid moment after the skipped time
+- **THEN** it becomes the first local time after the skip, so 02:30 on 14 March 2027 in America/New_York becomes 03:00 local time, and midnight skipped in Africa/Cairo becomes 01:00
+#### Scenario: First period after a Schedule change
+- **WHEN** a Schedule change takes effect at a moment that is not a boundary of the new rule, for example weekly Monday changed to weekly Friday at Monday 2 November 2026 00:00 in Africa/Lagos
+- **THEN** the first period of the new rule starts at that moment and ends before the next boundary of the new rule (Thursday 5 November 23:59:59, due Friday 6 November), and every period after it is a full period
+#### Scenario: Time zone changed with a Schedule change
+- **WHEN** a Schedule change takes effect at 2 November 2026 00:00 Lagos time and the new time zone is Africa/Cairo
+- **THEN** the first period of the new rule starts at that moment, which is 01:00 in Cairo, and all later boundaries use Cairo local midnight
 
 ### Requirement: The current period is the one still waiting for its deadline
 The system SHALL report as current the earliest period whose deadline has not passed. The period SHALL be created the first time anyone asks, exactly once, however many requests arrive together. A period that has not started SHALL NOT be created.
 #### Scenario: Before the deadline
 - **WHEN** it is Monday 26 October 2026 at 15:30 and the Schedule is the default
 - **THEN** the current period is the week of 19 October
+#### Scenario: At the deadline
+- **WHEN** it is exactly Monday 26 October 2026 at 17:00:00.000 and the Schedule is the default
+- **THEN** the current period is still the week of 19 October
 #### Scenario: After the deadline
-- **WHEN** it is Monday 26 October 2026 at 17:01 and the Schedule is the default
+- **WHEN** it is Monday 26 October 2026 at 17:00:00.001 or later and the Schedule is the default
 - **THEN** the current period is the week of 26 October
 #### Scenario: Simultaneous first requests
 - **WHEN** many members ask for the current period at the same moment
