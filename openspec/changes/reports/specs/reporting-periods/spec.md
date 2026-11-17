@@ -3,7 +3,7 @@ Defines Reporting periods: the span a report covers, with a start, an end and a 
 
 ## ADDED Requirements
 ### Requirement: Periods follow the Schedule in the Workspace time zone
-The system SHALL generate each period from the Schedule in force when the period starts. A period SHALL start at local midnight on a boundary date, end one second before the next boundary, and be due at the Schedule's time on the next boundary date. Local times SHALL be those of the Schedule's time zone, including across daylight saving changes.
+The system SHALL generate each period from the Schedule in force when the period starts. A period SHALL start at local midnight on a boundary date, except the first period of a new Schedule version, which starts at the moment the version takes effect. A period SHALL end one second before the next boundary, and be due at the Schedule's time on the next boundary date. Every period SHALL be labelled from its local start date in the Schedule's time zone. Local times SHALL be those of the Schedule's time zone, including across daylight saving changes.
 #### Scenario: Weekly default
 - **WHEN** the Schedule is weekly, Monday, 17:00 in Africa/Lagos
 - **THEN** the week of Monday 19 October 2026 starts 19 October 00:00, ends Sunday 25 October 23:59:59 and is due Monday 26 October 17:00, local time
@@ -28,12 +28,15 @@ The system SHALL generate each period from the Schedule in force when the period
 #### Scenario: First period after a Schedule change
 - **WHEN** a Schedule change takes effect at a moment that is not a boundary of the new rule, for example weekly Monday changed to weekly Friday at Monday 2 November 2026 00:00 in Africa/Lagos
 - **THEN** the first period of the new rule starts at that moment and ends before the next boundary of the new rule (Thursday 5 November 23:59:59, due Friday 6 November), and every period after it is a full period
+#### Scenario: Label of a first period that starts mid cycle
+- **WHEN** the first period of a new Schedule version starts on 2 November 2026 and the cadence is weekly
+- **THEN** its label is "Week of 2 November", and the same start date gives "Fortnight of 2 November" for fortnightly, "Monday 2 November" for daily and "Quarter starting 2 November 2026" for quarterly
 #### Scenario: Time zone changed with a Schedule change
 - **WHEN** a Schedule change takes effect at 2 November 2026 00:00 Lagos time and the new time zone is Africa/Cairo
 - **THEN** the first period of the new rule starts at that moment, which is 01:00 in Cairo, and all later boundaries use Cairo local midnight
 
 ### Requirement: The current period is the one still waiting for its deadline
-The system SHALL report as current the earliest period whose deadline has not passed. The period SHALL be created the first time anyone asks, exactly once, however many requests arrive together. A period that has not started SHALL NOT be created.
+The system SHALL report as current the earliest period whose deadline has not passed, or the period containing the present moment when no open period has a later deadline. The period SHALL be created the first time anyone asks, exactly once, however many requests arrive together. A period that has not started SHALL NOT be created.
 #### Scenario: Before the deadline
 - **WHEN** it is Monday 26 October 2026 at 15:30 and the Schedule is the default
 - **THEN** the current period is the week of 19 October
