@@ -40,3 +40,5 @@ $ openspec validate reports --strict
 Change 'reports' is valid
 ```
 Em dash check (no `rg` on this machine, PowerShell `Select-String` for U+2014 and U+2013 over `openspec/changes/reports/**`): 0 hits.
+
+Approved 2026-11-17 by owner (pre-approved via orchestrator): R1 to R4 and the brief scope. No new owner-level product decision found. Open design-review findings (3 MEDIUM, 4 LOW, implementation-level) are carried into the build via .agents/tasks/reports/carryover.md.
