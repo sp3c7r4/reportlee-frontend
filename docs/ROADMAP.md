@@ -31,6 +31,7 @@ OpenSpec changes under `openspec/changes/`; there is no other spec location.
 | earlier | Auth screens: sign in, OTP, sign up, verify (3 flows), forgot and reset password. Simulated, no backend | browser |
 | earlier | Onboarding: Workspace, Spaces, Team steps. Local state only, nothing is saved | browser |
 | 2026-11-16 | workspaces-people: Workspaces, Spaces, People roster and invitations on the real API, invite page with return after login | tsc + tests + API (90/90 live HTTP checks); browser pass not done |
+| 2026-11-16 | invite-daily-limit: invitations capped at 70 per Workspace and 300 for the platform per rolling 24 hours (429 `INVITE_DAILY_LIMIT` and `INVITE_PLATFORM_LIMIT`), and no email address in mail or worker log lines. No frontend change: the 429 message already reaches the invite form and onboarding | backend: biome + tsc + `npm test` 235/235 + build; frontend docs only |
 
 ## In progress
 
@@ -86,7 +87,7 @@ Nothing. Every UI task from UI-1 to UI-17 and the ai-drafting change is built; `
 - Storage keys still read `iroyin` (`iroyin.auth.flow`, `iroyin.auth.session`, `iroyin-sidebar`) and the package name is still `iroyin`. The theme cookie is renamed; these three are left because renaming them would drop in-flight OTP flows, and the sidebar cookie has no reader today.
 - The dashboard is not in the code. `docs/UI.md` and `docs/UI-BUILD-ORDER.md` still describe it as the target design, and say so at the top.
 - The onboarding invite step offers Staff and Admin only. A Head of Space needs a Space, so that picker is part of UI-4 and UI-5.
-- workspaces-people (P10): no limit on Workspaces per user or on invitation emails. Unlimited invite emails could get the owner's Gmail sender (about 500 a day) suspended. Proposed cap if wanted: 5 Workspaces per user and 20 invitation emails per Workspace per hour.
+- workspaces-people (P10): invitation emails are now capped (70 per Workspace and 300 for the platform per rolling 24 hours, see invite-daily-limit in Done). Still open: no limit on Workspaces per user, and signup and login code emails share the same Gmail sender (about 500 a day) with no cap of their own.
 - workspaces-people: the backend's `redactLog` does not mask `email`, so Zod request logging can print invited addresses. Adding `email` to `SENSITIVE_KEYS` changes existing log output, so it needs its own approval.
 - workspaces-people: `AGENTS.md` is stale. It says the backend does not exist, that the Drizzle journal stops at 0004 and that there is no local stack. The backend and `0001_workspaces_people.sql` now exist. Update those notes.
 - workspaces-people: `src/data/members.ts` is marked generated but its generator is missing.
@@ -97,7 +98,8 @@ Nothing. Every UI task from UI-1 to UI-17 and the ai-drafting change is built; `
 - workspaces-people: a last Admin can delete their own account (D22).
 - workspaces-people: older backend routes still log full responses through `sendSuccessResponse`; new routes opt out with `{ log: false }`.
 - workspaces-people: add a `.gitattributes` for backend migrations. A Windows CRLF checkout changes the file hash that `app/migrate.ts` records, so an applied migration would run again once.
-- workspaces-people: invitation emails have no rate limit, so a burst could get the Gmail sender suspended (see P10 above).
+- workspaces-people: the invite caps count rows created in the last 24 hours with no index on `invitations.created_at`. Fine at 300 a day. Add an index if the table grows to millions of rows.
+- invite-daily-limit: the Zod request and response logging can still print invited addresses (see the `redactLog` item above). Mail and worker log lines no longer carry any address.
 
 ## Not v1
 
