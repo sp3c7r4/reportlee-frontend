@@ -122,3 +122,16 @@ From `.agents/tasks/reports/design-review.json` (3 MEDIUM, 4 LOW). Full text in 
 | 7 | LOW | Noted: an unknown key `message` shows as a plain message (accepted) | none needed |
 
 `openspec validate reports --strict` after these edits: `Change 'reports' is valid`.
+
+### Gate 3 round 1, cross-repo integration check (frontend), 2026-11-18
+Integration read: every path, method and query name in `src/lib/reports-api.ts` and `src/lib/schedule-api.ts` matches the backend routers (`/reports`, `/reports/draft` GET and PATCH, `/reports/:id` GET, PATCH, DELETE, `/reports/:id/submit` POST, `/reporting-periods/current|open?workspaceId=`, `/workspaces/:wsId/schedule` GET and PUT). Carried-over findings 1 to 7 are already resolved (see "Design-review carry-over").
+Fix: `biome check` found import-order errors in 3 files (`scripts/settings.test.ts`, `submit-report.tsx`, `settings-screen.tsx`). Fixed with `biome check --write` on those files only (import reordering, no logic change), commit `4db5c2e`. Then all steps were rerun.
+```
+biome check, 14 LF files                    -> "Checked 14 files", exit 0, 15s
+biome lint, 3 CRLF working copies           -> "Checked 3 files", exit 0, 25s (report-draft.test.ts, data/reports.ts, api-types.ts; formatter skipped to avoid CRLF churn)
+npx tsc --noEmit                            -> exit 0, 86s
+npm test                                    -> 311 tests, 311 pass, 0 fail, 327s  (OVER 3 MIN, see note)
+npm run build                               -> exit 0, 107s
+U+2014 / U+2013 search over touched files   -> hits=0
+```
+Note: `npm test` took 327s against 42s in the earlier run. The machine was under load (other shell calls timed out in the same window). Not a test failure.
