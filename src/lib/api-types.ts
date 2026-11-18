@@ -9,6 +9,7 @@
 import type { RosterMember, SpaceSummary } from "../data/members.ts";
 import type { Membership, Workspace } from "../data/viewer.ts";
 import type { Role } from "./nav.ts";
+import type { Schedule } from "./settings.ts";
 
 export type { Membership, Workspace };
 
@@ -60,3 +61,29 @@ export type KpiRow = { name: string; unit: string };
 /** The two `error.code` values the frontend branches on, never the message text. */
 export const CODE_EMAIL_NOT_VERIFIED = "EMAIL_NOT_VERIFIED";
 export const CODE_INVITE_EMAIL_MISMATCH = "INVITE_EMAIL_MISMATCH";
+
+/**
+ * The Schedule as the API sends it (openspec/changes/reports/design.md, `ApiSchedule`).
+ * `effectiveFrom` is null for the baseline version. `pending` is a change that has not
+ * started yet.
+ */
+export type ApiSchedule = Schedule & {
+  effectiveFrom: string | null;
+  pending: (Schedule & { effectiveFrom: string }) | null;
+};
+
+/** The PUT answer adds the instant the new version starts. */
+export type ApiScheduleSaved = ApiSchedule & { appliesFrom: string };
+
+/** Report error codes. The screens branch on these, never on the message text. */
+export const CODE_NO_SPACE = "NO_SPACE";
+export const CODE_PERIOD_CLOSED = "PERIOD_CLOSED";
+export const CODE_PERIOD_NOT_OPEN = "PERIOD_NOT_OPEN";
+export const CODE_EDIT_WINDOW_CLOSED = "EDIT_WINDOW_CLOSED";
+export const CODE_REPORT_APPROVED = "REPORT_APPROVED";
+export const CODE_REPORT_SEEN = "REPORT_SEEN";
+export const CODE_WORKSPACE_READ_ONLY = "WORKSPACE_READ_ONLY";
+export const CODE_ALREADY_SUBMITTED = "ALREADY_SUBMITTED";
+export const CODE_NOT_SUBMITTED = "NOT_SUBMITTED";
+export const CODE_NOT_AUTHOR = "NOT_AUTHOR";
+export const CODE_ADMIN_CANNOT_AUTHOR = "ADMIN_CANNOT_AUTHOR";

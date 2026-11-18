@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { ReportDraft } from "../src/data/reports.ts";
 import {
@@ -185,4 +186,19 @@ test("display text keeps the line breaks and drops the markup", () => {
     "<script>alert(1)</script>",
   );
   assert.equal(htmlToLines("<p>  spaced   out  </p>"), "spaced out");
+});
+
+/* @info - The same cases run in the backend's tests/report-sanitizer.test.ts, so the
+   browser and the server count visible text the same way (D27). Keep the files equal. */
+type TextCase = { html: string; text: string; length: number };
+const sharedCases: TextCase[] = JSON.parse(
+  readFileSync(new URL("./report-text.cases.json", import.meta.url), "utf-8"),
+);
+
+test("htmlToText matches the shared cases", () => {
+  assert.ok(sharedCases.length > 5);
+  for (const c of sharedCases) {
+    assert.equal(htmlToText(c.html), c.text, c.html);
+    assert.equal(htmlToText(c.html).length, c.length, c.html);
+  }
 });
