@@ -32,6 +32,7 @@ OpenSpec changes under `openspec/changes/`; there is no other spec location.
 | earlier | Onboarding: Workspace, Spaces, Team steps. Local state only, nothing is saved | browser |
 | 2026-11-16 | workspaces-people: Workspaces, Spaces, People roster and invitations on the real API, invite page with return after login | tsc + tests + API (90/90 live HTTP checks); browser pass not done |
 | 2026-11-16 | invite-daily-limit: invitations capped at 70 per Workspace and 300 for the platform per rolling 24 hours (429 `INVITE_DAILY_LIMIT` and `INVITE_PLATFORM_LIMIT`), and no email address in mail or worker log lines. No frontend change: the 429 message already reaches the invite form and onboarding | backend: biome + tsc + `npm test` 235/235 + build; frontend docs only |
+| 2026-11-18 | reports (slice 2): weekly-to-quarterly Schedule with versions, lazily made Reporting periods, one autosaving draft per person per period, submit with late marking and a 7 day grace, edit with revisions and `edited` events, delete while unseen, server-side HTML sanitizing (`sanitize-html`), one `ReportAccess` choke point. Migration `0002_reports.sql`. Submit, My reports, Report page and Settings schedule now use the real API. My record and the review screens stay on sample data | backend: biome + tsc + check:circular + `npm test` 396/396 + build; frontend: biome + tsc + `npm test` 311/311 + build; fresh-context review APPROVED; live HTTP check on :5000 (all checks seen); browser pass not done |
 
 ## In progress
 
@@ -100,6 +101,18 @@ Nothing. Every UI task from UI-1 to UI-17 and the ai-drafting change is built; `
 - workspaces-people: add a `.gitattributes` for backend migrations. A Windows CRLF checkout changes the file hash that `app/migrate.ts` records, so an applied migration would run again once.
 - workspaces-people: the invite caps count rows created in the last 24 hours with no index on `invitations.created_at`. Fine at 300 a day. Add an index if the table grows to millions of rows.
 - invite-daily-limit: the Zod request and response logging can still print invited addresses (see the `redactLog` item above). Mail and worker log lines no longer carry any address.
+- reports (slice 3 must add): nothing sets `first_seen_at` or `window_started_at` yet. The columns and `ReportAccess.editState` honour them, and tests seed them with SQL. Slice 3 must set both together when a reviewer first opens a report, and test: seen, edited (window cleared), seen again, then past the window. A seen report with a null window is editable without limit today.
+- reports (slice 3 must add): review decisions (approve, reject, reopen) and the `approved`, `rejected`, `reopened` events (the enum values already exist), the review queue, comments (`comments` is `[]` in every Report response) and tasks. Slice 3 reuses `ReportAccess`; it must also decide the Admin read rule: `reviewersFor` applied literally means an Admin cannot read a Staff report in a Space that has a Head, while CONTEXT.md says Admins monitor everything.
+- reports: My record (`/dashboard/my-record`) still reads sample data because it needs the roster and analytics (slice 4). Home, search and the task board also still read sample data.
+- reports: attachments store metadata only (`uploaded: false`); there is no upload. Location is stored as sent and is not gated on `location_tagging`. `edit_window_minutes` has no endpoint to change it (Settings, later).
+- reports: the save-versus-submit race test only asserts where the report ended up. Make it deterministic by holding the row lock in one transaction while firing the other call.
+- reports: `report.model.ts` and `schedule.model.ts` were not diffed column by column against `0002_reports.sql`. `tests/migration-0002.test.ts` covers the SQL. Diff them if certainty is wanted.
+- reports: no automated test for the frontend screen states (loading, error, closed period); only the `src/lib` logic is tested. The browser pass was not run.
+- reports: a second staff peer reading another member's draft was not tested live (the Admin was used as the other member). The tests cover it.
+- reports: `npm test` in the frontend took 327s to 479s and the full backend suite 1709s under machine load, over the 3 minute rule. Setup, not tests, is the cost. `rg` is not installed here, so dash checks use `Select-String`.
+- reports: `.gitattributes` is still missing for backend migrations. With `core.autocrlf=true` a checkout writes `0002_reports.sql` as CRLF, which changes its hash and runs it once more (harmless, it is idempotent). Same risk as slice 1.
+- reports: the backend has one pre-existing em dash in a code comment, `src/db/postgres.schema.ts:1`.
+- reports: the live check left fixtures in the local `app` database: Workspace 8, Space 11, Membership 15, periods 2 and 3, reports 1 (soft deleted), 4 and 5.
 
 ## Not v1
 
