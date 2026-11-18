@@ -135,3 +135,19 @@ npm run build                               -> exit 0, 107s
 U+2014 / U+2013 search over touched files   -> hits=0
 ```
 Note: `npm test` took 327s against 42s in the earlier run. The machine was under load (other shell calls timed out in the same window). Not a test failure.
+
+### Gate 3 round 1, backend (repo `reportlee-backend`, HEAD b196359, no backend file changed this round), 2026-11-18
+Machine under heavy load; durations are 3 to 6 times the earlier run. Run as one `&&`-style chain that stops at the first failure.
+```
+npx biome check, 32 new .ts files            -> "Checked 32 files", exit 0, 62s
+npx biome lint, 11 edited .ts files          -> "Checked 11 files", exit 0, 4s (formatter skipped: CRLF working copies)
+npx tsc --noEmit                             -> exit 0, 124s
+npm run check:circular                       -> 216 files, 1 cycle: user.model.ts > user-role.model.ts (the known one), 118s
+npx vitest run (7 touched suites: migration-0002, period-calendar, report-sanitizer, schedule, error-handler-db, reports, report-access)
+                                             -> 7 files, 161 tests passed, 0 failed, 766s (setup 400.5s, tests 193.5s)
+npm test (full)                              -> 30 files, 396 tests passed, 0 failed, 1709s (setup 881.0s, tests 548.1s)
+npm run build                                -> "Build complete.", 18s
+em/en dash search over changed .ts files     -> 1 hit: src/db/postgres.schema.ts:1, a code comment that predates this change. No user-facing hit
+```
+Test count matches the build-time run (396). The full suite took 1709s against 297s before; the extra time is setup (881s vs 168s), not tests, so it is machine load and not a defect.
+No migration was run, no `.env*` file was read, the API on :5000 and the email worker were left running.
