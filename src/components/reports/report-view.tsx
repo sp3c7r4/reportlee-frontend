@@ -12,46 +12,38 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { TopBarAction, useShell } from "@/components/dashboard/shell-context";
 import { Button } from "@/components/ui/button";
-import {
-  periodLabel,
-  type Report,
-  SAMPLE_NOW,
-  SAMPLE_PERIOD,
-} from "@/data/reports";
-import { recordAudit } from "@/lib/audit";
+import type { Report, ReportingPeriod } from "@/data/reports";
+import { SAMPLE_TASKS, type Task } from "@/data/tasks";
+import { periodTitle } from "@/lib/periods";
 import { htmlToLines } from "@/lib/report-draft";
+import { reportErrorMessage } from "@/lib/report-errors";
 import {
   lastDecision,
   latestReason,
   lockAt,
   primaryAction,
-  seenOnOpen,
   timeLeft,
   timelineFor,
   visibleReports,
 } from "@/lib/report-view";
+import { putHandoff } from "@/lib/reports";
 import {
-  clearEditCopy,
-  draftKey,
-  hiddenReportIds,
-  hideReport,
-  loadReport,
-  loadReports,
-  putHandoff,
-  readDraft,
-  SAVED_PREFIX,
-  savedReports,
-} from "@/lib/reports";
+  deleteReport,
+  getOpenPeriods,
+  getReport,
+  listMyDrafts,
+  listMyReports,
+} from "@/lib/reports-api";
 import { SUBMISSION_STATUS } from "@/lib/status";
 import { cn } from "@/lib/utils";
-import { SAMPLE_TASKS, type Task } from "@/data/tasks";
 import { ReportDiscussion } from "./report-discussion";
 import { ReportTimeline, StatePill } from "./report-timeline";
 
 /* @info - Reading a Report writes nothing, reviewers included: seen belongs to review.
-   Edit and Delete here mirror the server's rules; they are not the rules. */
+   Edit and Delete here are hints from the same rules; the server answer wins. */
 
 const MINUTE = 60 * 1000;
+const PAGE = 50;
 
 const FILTER_LABEL = {
   all: "All",
@@ -73,21 +65,17 @@ export function ReportView({ reportId }: { reportId: string }) {
   const router = useRouter();
 
   const [report, setReport] = useState<Report | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "missing">(
-    "loading",
-  );
+  const [state, setState] = useState<
+    | { kind: "loading" }
+    | { kind: "ready" }
+    | { kind: "missing" }
+    | { kind: "error"; message: string }
+  >({ kind: "loading" });
+  const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
-
-  /* @info - Comments and tasks live on this device until the server owns them. */
-  const persistReport = async (next: Report) => {
-    const saved = savedReports(window.localStorage, membership.id);
-    window.localStorage.setItem(
-      `${SAVED_PREFIX}.${membership.id}`,
-      JSON.stringify({ ...saved, [next.id]: next }),
-    );
-  };
 
   useEffect(() => {
     try {
@@ -99,45 +87,24 @@ export function ReportView({ reportId }: { reportId: string }) {
   }, []);
 
   const load = useCallback(async () => {
-    setState("loading");
-    const hidden = hiddenReportIds(window.localStorage, membership.id);
-    const result = await loadReport(
-      window.localStorage,
-      membership.id,
-      reportId,
-      hidden,
-    );
-    if (result.success) {
-      // Opening the page is the open: the clocks start here, never on a queue row.
-      const clocks = seenOnOpen(result.data, viewer, new Date().toISOString());
-      if (clocks) {
-        const seen = {
-          ...result.data,
-          ...clocks,
-          events: [
-            ...result.data.events,
-            {
-              kind: "seen" as const,
-              at: clocks.windowStartedAt,
-              actorMembershipId: membership.id,
-            },
-          ],
-        };
-        const saved = savedReports(window.localStorage, membership.id);
-        window.localStorage.setItem(
-          `${SAVED_PREFIX}.${membership.id}`,
-          JSON.stringify({ ...saved, [seen.id]: seen }),
-        );
-        setReport(seen);
-        setState("ready");
-        return;
-      }
+    setState({ kind: "loading" });
+    const [result, open] = await Promise.all([
+      getReport(reportId),
+      getOpenPeriods(workspace.id),
+    ]);
+    if (open.ok) setPeriods(open.data);
+    if (result.ok) {
       setReport(result.data);
-      setState("ready");
+      setState({ kind: "ready" });
       return;
     }
-    setState("missing");
-  }, [membership.id, reportId]);
+    /* @info - Every 404 reads the same, whatever the cause, as the server intends. */
+    setState(
+      result.status === 404
+        ? { kind: "missing" }
+        : { kind: "error", message: reportErrorMessage(result) },
+    );
+  }, [reportId, workspace.id]);
 
   useEffect(() => {
     void load();
@@ -155,7 +122,7 @@ export function ReportView({ reportId }: { reportId: string }) {
   const action = useMemo(
     () =>
       report
-        ? primaryAction(report, viewer, SAMPLE_NOW, {
+        ? primaryAction(report, viewer, new Date().toISOString(), {
             workspaceReadOnly: workspace.readOnly,
           })
         : null,
@@ -168,21 +135,41 @@ export function ReportView({ reportId }: { reportId: string }) {
     router.push("/dashboard/reports/new");
   }, [membership.id, report, router]);
 
-  const remove = useCallback(() => {
-    if (!report) return;
-    recordAudit(window.localStorage, membership.id, {
-      at: SAMPLE_NOW,
-      actorMembershipId: membership.id,
-      action: "report.deleted",
-      target: report.id,
-      summary: `Deleted ${periodLabel(report.periodId)}`,
-    });
-    hideReport(window.localStorage, membership.id, report.id);
-    clearEditCopy(window.localStorage, membership.id, report.id);
-    router.push("/dashboard/reports");
-  }, [membership.id, report, router]);
+  const remove = useCallback(async () => {
+    if (!report || deleting) return;
+    setDeleting(true);
+    const result = await deleteReport(report.id);
+    if (result.ok) {
+      router.push("/dashboard/reports");
+      return;
+    }
+    setDeleting(false);
+    setConfirmDelete(false);
+    setNotice(reportErrorMessage(result));
+  }, [deleting, report, router]);
 
-  if (state === "loading") {
+  if (state.kind === "error") {
+    return (
+      <Shell>
+        <div role="alert">
+          <h1 className="font-bold text-[22px] text-ink tracking-[-0.02em]">
+            The report could not be loaded
+          </h1>
+          <p className="mt-2 max-w-[60ch] text-[14px] text-ink/60 leading-[1.6]">
+            {state.message}
+          </p>
+          <Button
+            onClick={() => void load()}
+            className="mt-4 min-h-11 rounded-xl"
+          >
+            Retry
+          </Button>
+        </div>
+      </Shell>
+    );
+  }
+
+  if (state.kind === "loading") {
     return (
       <Shell>
         <div className="h-6 w-48 animate-pulse rounded bg-surface-muted" />
@@ -191,14 +178,14 @@ export function ReportView({ reportId }: { reportId: string }) {
     );
   }
 
-  if (state !== "ready" || !report) {
+  if (state.kind !== "ready" || !report) {
     return (
       <Shell>
         <h1 className="font-bold text-[22px] text-ink tracking-[-0.02em]">
-          That Report could not be found
+          Report not found
         </h1>
         <p className="mt-2 max-w-[60ch] text-[14px] text-ink/60 leading-[1.6]">
-          It may have been deleted, or it belongs to somebody else.
+          It may have been deleted, or it is not yours to open.
         </p>
         <div className="mt-4 flex gap-2">
           <Button onClick={() => void load()} className="min-h-11 rounded-xl">
@@ -224,7 +211,7 @@ export function ReportView({ reportId }: { reportId: string }) {
   const reason = latestReason(report);
   const decision = lastDecision(report);
   const lock = lockAt(report);
-  const left = timeLeft(SAMPLE_NOW, lock);
+  const left = timeLeft(new Date().toISOString(), lock);
   const events = timelineFor(report, viewer);
   const submission = SUBMISSION_STATUS[report.submissionStatus];
 
@@ -261,7 +248,7 @@ export function ReportView({ reportId }: { reportId: string }) {
               />
             </div>
             <p className="mt-1 text-[13px] text-ink/60">
-              {periodLabel(report.periodId)} · submitted{" "}
+              {periodTitle(report.periodId, periods)} · submitted{" "}
               {formatWhen(report.submittedAt, workspace.timeZone)} (
               {workspace.timeZone})
             </p>
@@ -394,13 +381,11 @@ export function ReportView({ reportId }: { reportId: string }) {
               readOnly={workspace.readOnly}
               now={new Date().toISOString()}
               tasks={tasks}
-              onComment={(comment) => {
-                const next = {
-                  ...report,
-                  comments: [...report.comments, comment],
-                };
-                setReport(next);
-                void persistReport(next);
+              onComment={() => {
+                /* @info - Comments arrive with the review slice. Nothing is posted. */
+                setNotice(
+                  "Comments are not saved yet. They arrive with review.",
+                );
               }}
               onCreateTask={(task) => {
                 setTasks((current) => [...current, task]);
@@ -470,10 +455,11 @@ export function ReportView({ reportId }: { reportId: string }) {
                   </p>
                   <div className="mt-2 flex gap-2">
                     <Button
-                      onClick={remove}
+                      onClick={() => void remove()}
+                      disabled={deleting}
                       className="min-h-11 rounded-xl bg-destructive px-3 text-surface"
                     >
-                      Delete
+                      {deleting ? "Deleting" : "Delete"}
                     </Button>
                     <Button
                       variant="ghost"
@@ -495,8 +481,7 @@ export function ReportView({ reportId }: { reportId: string }) {
                 </Button>
               )}
               <p className="text-[11.5px] text-ink/45">
-                Deleting hides it on this device. The server owns the real
-                delete.
+                You can delete a report until a reviewer opens it.
               </p>
             </div>
           ) : null}
@@ -519,31 +504,69 @@ export function ReportView({ reportId }: { reportId: string }) {
 export function ReportList() {
   const { membership, workspace } = useShell();
   const [reports, setReports] = useState<Report[] | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [more, setMore] = useState<"idle" | "loading" | "done">("idle");
+  const [moreError, setMoreError] = useState<string | null>(null);
+  const [periods, setPeriods] = useState<ReportingPeriod[]>([]);
   const [filter, setFilter] = useState<
     "all" | "pending" | "approved" | "rejected"
   >("all");
   const [draftPeriod, setDraftPeriod] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: version is the retry trigger
   useEffect(() => {
-    const ids = hiddenReportIds(window.localStorage, membership.id);
-    void loadReports(window.localStorage, membership.id, ids).then((result) => {
-      if (result.success) setReports(result.data);
-      else setReports([]);
+    let cancelled = false;
+    setReports(null);
+    setFailure(null);
+    setMore("idle");
+    void Promise.all([
+      listMyReports(workspace.id, { limit: PAGE, offset: 0 }),
+      getOpenPeriods(workspace.id),
+      membership.role === "admin"
+        ? Promise.resolve(null)
+        : listMyDrafts(workspace.id),
+    ]).then(([result, open, drafts]) => {
+      if (cancelled) return;
+      const known = open.ok ? open.data : [];
+      setPeriods(known);
+      if (!result.ok) {
+        setFailure(reportErrorMessage(result));
+        return;
+      }
+      setReports(result.data);
+      if (result.data.length < PAGE) setMore("done");
+      const draft = drafts?.ok ? drafts.data[0] : undefined;
+      setDraftPeriod(draft ? periodTitle(draft.periodId, known) : null);
     });
+    return () => {
+      cancelled = true;
+    };
+  }, [membership.role, version, workspace.id]);
 
-    const draft = readDraft(
-      window.localStorage,
-      draftKey(membership.id, SAMPLE_PERIOD.id),
-    );
-    setDraftPeriod(draft ? SAMPLE_PERIOD.label : null);
-  }, [membership.id]);
+  const loadMore = useCallback(async () => {
+    if (!reports || more !== "idle") return;
+    setMore("loading");
+    setMoreError(null);
+    const next = await listMyReports(workspace.id, {
+      limit: PAGE,
+      offset: reports.length,
+    });
+    if (!next.ok) {
+      setMore("idle");
+      setMoreError(reportErrorMessage(next));
+      return;
+    }
+    setReports([...reports, ...next.data]);
+    setMore(next.data.length < PAGE ? "done" : "idle");
+  }, [more, reports, workspace.id]);
 
   const rows = useMemo(() => {
     if (!reports) return null;
     const visible = visibleReports(
       reports.filter((report) => report.authorMembershipId === membership.id),
       workspace.plan,
-      SAMPLE_NOW,
+      new Date().toISOString(),
     );
     const filtered =
       filter === "all"
@@ -630,22 +653,47 @@ export function ReportList() {
           </Link>
         ) : null}
 
-        {rows === null ? (
-          <div className="h-24 animate-pulse rounded-2xl bg-surface-muted" />
+        {failure ? (
+          <div role="alert" className="rounded-2xl border border-hairline p-4">
+            <p className="text-[13.5px] text-ink">{failure}</p>
+            <Button
+              variant="outline"
+              onClick={() => setVersion((current) => current + 1)}
+              className="mt-2 min-h-11 rounded-md px-3 text-[13px] sm:min-h-9"
+            >
+              Retry
+            </Button>
+          </div>
+        ) : rows === null ? (
+          <div aria-busy="true">
+            <span className="sr-only">Loading</span>
+            <div className="h-24 animate-pulse rounded-2xl bg-surface-muted" />
+          </div>
         ) : rows.length === 0 ? (
           <div className="rounded-2xl border border-hairline border-dashed p-6 text-center">
             <p className="text-[13.5px] text-ink">
               {filter === "all"
-                ? "No reports yet."
+                ? "You have not submitted a report yet."
                 : `Nothing is ${filter} right now.`}
             </p>
-            <button
-              type="button"
-              onClick={() => setFilter("all")}
-              className="mt-2 text-[12.5px] text-ink/60 underline"
-            >
-              Show all
-            </button>
+            {filter === "all" ? (
+              membership.role === "admin" ? null : (
+                <Link
+                  href="/dashboard/reports/new"
+                  className="mt-2 inline-block text-[12.5px] text-ink/60 underline"
+                >
+                  Submit a report
+                </Link>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={() => setFilter("all")}
+                className="mt-2 text-[12.5px] text-ink/60 underline"
+              >
+                Show all
+              </button>
+            )}
           </div>
         ) : (
           rows.map((report) => (
@@ -655,7 +703,7 @@ export function ReportList() {
               className="grid gap-x-3 gap-y-1 rounded-2xl border border-hairline px-3.5 py-3 hover:bg-surface-muted sm:grid-cols-[minmax(0,1fr)_150px_170px] sm:items-center"
             >
               <span className="text-[13.5px] text-ink">
-                {periodLabel(report.periodId)}
+                {periodTitle(report.periodId, periods)}
                 {report.revisions.length > 0 ? (
                   <span className="ml-2 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-ink/60">
                     Edited
@@ -672,6 +720,23 @@ export function ReportList() {
             </Link>
           ))
         )}
+        {reports && !failure && more !== "done" ? (
+          <div>
+            <Button
+              variant="outline"
+              onClick={() => void loadMore()}
+              disabled={more === "loading"}
+              className="min-h-11 rounded-md px-3 text-[13px] sm:min-h-9"
+            >
+              {more === "loading" ? "Loading" : "Load more"}
+            </Button>
+            {moreError ? (
+              <p role="alert" className="mt-1 text-[12.5px] text-destructive">
+                {moreError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </Shell>
   );

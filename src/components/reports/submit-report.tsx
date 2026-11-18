@@ -13,23 +13,41 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TopBarAction, useShell } from "@/components/dashboard/shell-context";
-import { SPACES } from "@/data/members";
-import { templateFor } from "@/lib/spaces";
 import { Button } from "@/components/ui/button";
-import {
-  type Attachment,
-  COLLEAGUES,
-  type Colleague,
-  type Report,
-  type ReportDraft,
-  type ReportLocation,
-  periodLabel,
-  SAMPLE_KPI_TEMPLATE,
-  SAMPLE_NOW,
-  SAMPLE_PERIOD,
-  SAMPLE_REPORTS,
-  SUBMISSION_WINDOW_MS,
+import type {
+  Attachment,
+  KpiTemplateField,
+  Report,
+  ReportDraft,
+  ReportingPeriod,
+  ReportLocation,
 } from "@/data/reports";
+import {
+  type ApiMember,
+  CODE_ALREADY_SUBMITTED,
+  CODE_PERIOD_CLOSED,
+} from "@/lib/api-types";
+import { listMembers } from "@/lib/members";
+import { pickSubmitPeriod } from "@/lib/periods";
+import {
+  groupFieldErrors,
+  reportErrorMessage,
+  type SectionField,
+  submitBlock,
+} from "@/lib/report-errors";
+import { draftBody, SUBMITTED_KEY, takeHandoff } from "@/lib/reports";
+import {
+  editBody,
+  editReport,
+  getCurrentPeriod,
+  getDraft,
+  getOpenPeriods,
+  getReport,
+  listMyReports,
+  saveDraft,
+  submitReport,
+} from "@/lib/reports-api";
+import { listSpaces } from "@/lib/spaces-api";
 import {
   ACCOMPLISHMENTS_MIN,
   ATTACHMENT_MAX_FILES,
@@ -44,23 +62,8 @@ import {
   removeColleague,
   sectionTone,
   selectColleague,
-  submissionStatusFor,
   submitBlockers,
 } from "@/lib/report-draft";
-import {
-  clearDraftsFor,
-  clearEditCopy,
-  draftKey,
-  hiddenReportIds,
-  readDraft,
-  readEditCopy,
-  SUBMITTED_KEY,
-  saveReport,
-  submitReport,
-  takeHandoff,
-  writeDraft,
-  writeEditCopy,
-} from "@/lib/reports";
 import { SUBMISSION_STATUS } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { recordAudit } from "@/lib/audit";
@@ -93,8 +96,7 @@ type Form = {
 
 type Counts = Record<"accomplishments" | "challenges" | "plans", number>;
 
-function emptyForm(spaceName: string | null): Form {
-  const rows = templateFor(spaceName, SPACES) ?? SAMPLE_KPI_TEMPLATE;
+function emptyForm(rows: KpiTemplateField[]): Form {
   return {
     accomplishments: "",
     challenges: "",
@@ -110,7 +112,8 @@ function emptyForm(spaceName: string | null): Form {
   };
 }
 
-const debounceMs = 600;
+/* @info - Design: autosave 1500 ms after the last change. */
+const debounceMs = 1500;
 
 /** The editor stores HTML, so generated text becomes one escaped paragraph. */
 function wrap(text: string): string {
@@ -238,11 +241,25 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+type Loaded =
+  | { state: "loading" }
+  | { state: "error"; message: string }
+  | { state: "ready" };
+
+const FIELD_OF: Record<SectionField, FieldId | null> = {
+  accomplishments: "accomplishments",
+  challenges: "challenges",
+  plans: "plans",
+  colleagues: "colleagues",
+  attachments: "attachments",
+  location: null,
+};
+
 export function SubmitReport() {
   const { membership, workspace, user } = useShell();
   const router = useRouter();
 
-  const [form, setForm] = useState<Form>(() => emptyForm(membership.space));
+  const [form, setForm] = useState<Form>(() => emptyForm([]));
   const [drafting, setDrafting] = useState(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const [pendingSuggestion, setPendingSuggestion] = useState<Suggestion | null>(
@@ -268,15 +285,20 @@ export function SubmitReport() {
     challenges: 0,
     plans: 0,
   });
+  const [loaded, setLoaded] = useState<Loaded>({ state: "loading" });
+  const [reloadKey, setReloadKey] = useState(0);
+  const [period, setPeriod] = useState<ReportingPeriod | null>(null);
   const [base, setBase] = useState<ReportDraft | null>(null);
+  const [submittedReport, setSubmittedReport] = useState<Report | null>(null);
+  const [closed, setClosed] = useState(false);
+  const [people, setPeople] = useState<ApiMember[]>([]);
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
   const [problems, setProblems] = useState<DraftProblem[]>([]);
   const [kpiProblems, setKpiProblems] = useState<KpiProblem[]>([]);
   const [banner, setBanner] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [staleElsewhere, setStaleElsewhere] = useState(false);
   const [colleagueQuery, setColleagueQuery] = useState("");
-  const [colleagueResults, setColleagueResults] = useState<Colleague[] | null>(
+  const [colleagueResults, setColleagueResults] = useState<ApiMember[] | null>(
     null,
   );
   const [colleagueNotice, setColleagueNotice] = useState<string | null>(null);
@@ -290,136 +312,219 @@ export function SubmitReport() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<Form | null>(null);
   const kpiRef = useRef<HTMLDivElement | null>(null);
+  const baseRef = useRef<ReportDraft | null>(null);
+  /* @info - Only the newest save may write the indicator, so a slow old answer cannot
+     say Saved over a newer failure. */
+  const saveSeq = useRef(0);
+  baseRef.current = base;
 
-  const key = draftKey(membership.id, SAMPLE_PERIOD.id);
-
-  const openPeriod = useMemo(() => {
-    const now = Date.parse(SAMPLE_NOW);
-    const closesAt = Date.parse(SAMPLE_PERIOD.dueAt) + SUBMISSION_WINDOW_MS;
-    return now >= Date.parse(SAMPLE_PERIOD.startsAt) && now <= closesAt;
-  }, []);
-
-  const hidden = useMemo(
+  const blocked = useMemo(
     () =>
-      typeof window === "undefined"
-        ? []
-        : hiddenReportIds(window.localStorage, membership.id),
-    [membership.id],
+      submitBlock({
+        role: membership.role,
+        readOnly: workspace.readOnly,
+        hasSpace: membership.space !== null,
+      }),
+    [membership.role, membership.space, workspace.readOnly],
   );
 
-  /**
-   * Already submitted is a fact about this Membership's own Reports, and it respects the
-   * hidden set: deleting a Report frees the period, so there is never a link to a Report
-   * the page would then call not found.
-   */
-  const ownSubmitted = SAMPLE_REPORTS.filter(
-    (report) =>
-      report.authorMembershipId === membership.id &&
-      !hidden.includes(report.id),
+  /** Puts a server field map next to the fields it names. */
+  const showFieldErrors = useCallback(
+    (fields: Record<string, string> | undefined) => {
+      const grouped = groupFieldErrors(fields);
+      const next: DraftProblem[] = [];
+      const loose = [...grouped.other];
+      for (const [section, message] of Object.entries(grouped.sections)) {
+        const field = FIELD_OF[section as SectionField];
+        if (field) next.push({ field, message });
+        else loose.push(message);
+      }
+      if (grouped.kpis) loose.push(grouped.kpis);
+      setProblems(next);
+      setKpiProblems(
+        Object.entries(grouped.kpiRows).map(([index, message]) => ({
+          index: Number(index),
+          field: "value" as const,
+          message,
+        })),
+      );
+      return loose.join(" ");
+    },
+    [],
   );
-  const alreadySubmitted = openPeriod && ownSubmitted.length > 0;
 
-  const blocked = useMemo(() => {
-    if (membership.role === "admin") {
-      return {
-        title: "Admins monitor Reports",
-        body: "Workspace Admins review Reports and don't submit them. Open Review to see what is waiting.",
-      };
-    }
-    if (!openPeriod) {
-      return {
-        title: "No report is open",
-        body: `The ${SAMPLE_PERIOD.label.toLowerCase()} period is closed. The next one opens on a schedule the Workspace sets.`,
-      };
-    }
-    if (workspace.readOnly) {
-      return {
-        title: "This Workspace is read-only",
-        body: "Reports can be read but not written while the Workspace is read-only.",
-      };
-    }
-    if (membership.space === null) {
-      return {
-        title: "This Workspace is still being set up",
-        body: "You are not in a Space yet, so a Report has nowhere to go. A Workspace Admin can add you to one.",
-      };
-    }
-    return null;
-  }, [membership.role, membership.space, openPeriod, workspace.readOnly]);
+  /** One answer to every refused call: a field message, a reload, or a banner. */
+  const refused = useCallback(
+    (failure: {
+      status: number;
+      code?: string;
+      message: string;
+      fields?: Record<string, string>;
+    }): string | null => {
+      if (failure.code === CODE_ALREADY_SUBMITTED) {
+        setReloadKey((current) => current + 1);
+        return null;
+      }
+      if (failure.code === CODE_PERIOD_CLOSED) setClosed(true);
+      if (failure.fields) {
+        const loose = showFieldErrors(failure.fields);
+        return loose || null;
+      }
+      return reportErrorMessage(failure);
+    },
+    [showFieldErrors],
+  );
 
-  const load = useCallback(() => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reloadKey is the retry trigger
+  useEffect(() => {
     if (blocked) return;
+    let cancelled = false;
 
-    // A handoff is consumed once; a second visit is the ordinary form.
-    const handoff = takeHandoff(window.localStorage, membership.id);
-    const target = handoff
-      ? (SAMPLE_REPORTS.find((report) => report.id === handoff) ?? null)
-      : null;
+    const fail = (message: string) => {
+      if (!cancelled) setLoaded({ state: "error", message });
+    };
 
-    if (target) {
-      setEditTarget(target);
-      const copy = readEditCopy(window.localStorage, membership.id, target.id);
-      const startForm = copy ? formFromDraft(copy) : formFromDraft(target);
-      setBase(copy ?? target);
+    void (async () => {
+      setLoaded({ state: "loading" });
+      setSubmittedReport(null);
+      setEditTarget(null);
+      setClosed(false);
+      setBanner(null);
+      setProblems([]);
+      setKpiProblems([]);
+
+      /* @info - The handoff is one shot: a second visit is the ordinary form. */
+      const handoff = takeHandoff(window.localStorage, membership.id);
+      const [spaces, members] = await Promise.all([
+        listSpaces(workspace.id),
+        listMembers(workspace.id),
+      ]);
+      if (cancelled) return;
+      if (members.ok) {
+        setPeople(
+          members.data.filter(
+            (person) => person.active && person.membershipId !== membership.id,
+          ),
+        );
+      }
+      const space = spaces.ok
+        ? spaces.data.find(
+            (row) =>
+              (membership.spaceId && row.id === membership.spaceId) ||
+              row.name === membership.space,
+          )
+        : undefined;
+      const template = space?.kpiTemplate ?? [];
+
+      if (handoff) {
+        const found = await getReport(handoff);
+        if (cancelled) return;
+        if (!found.ok) {
+          fail(reportErrorMessage(found));
+          return;
+        }
+        const startForm = formFromDraft(found.data);
+        setEditTarget(found.data);
+        setBase(found.data);
+        setForm(startForm);
+        setCounts(countsOf(startForm));
+        setSave({ kind: "idle" });
+        setLoaded({ state: "ready" });
+        return;
+      }
+
+      const [current, open, mine] = await Promise.all([
+        getCurrentPeriod(workspace.id),
+        getOpenPeriods(workspace.id),
+        listMyReports(workspace.id, { limit: 100 }),
+      ]);
+      if (cancelled) return;
+      if (!current.ok) return fail(reportErrorMessage(current));
+      if (!mine.ok) return fail(reportErrorMessage(mine));
+
+      const submittedIds = new Set(mine.data.map((report) => report.periodId));
+      const chosen = pickSubmitPeriod(
+        open.ok ? open.data : [],
+        current.data,
+        submittedIds,
+      );
+      if (!chosen) return fail("There is no open reporting period.");
+      setPeriod(chosen);
+
+      const already = mine.data.find((report) => report.periodId === chosen.id);
+      if (already) {
+        setSubmittedReport(already);
+        setLoaded({ state: "ready" });
+        return;
+      }
+
+      const draft = await getDraft(chosen.id);
+      if (cancelled) return;
+      if (!draft.ok) {
+        const message = refused(draft);
+        if (message) fail(message);
+        return;
+      }
+      const fresh: ReportDraft = draft.data ?? {
+        id: "",
+        periodId: chosen.id,
+        authorMembershipId: membership.id,
+        accomplishments: "",
+        challenges: "",
+        plans: "",
+        kpis: template.map((field) => ({ ...field, value: null })),
+        attachments: [],
+        taggedMembershipIds: [],
+        location: null,
+        submissionStatus: "draft",
+        reviewStatus: "pending",
+        updatedAt: new Date().toISOString(),
+      };
+      const startForm = formFromDraft(fresh);
+      setBase(fresh);
       setForm(startForm);
       setCounts(countsOf(startForm));
-      if (copy) setSave({ kind: "saved" });
-      return;
-    }
+      setSave(draft.data ? { kind: "saved" } : { kind: "idle" });
+      setLoaded({ state: "ready" });
+    })();
 
-    if (alreadySubmitted) return;
-    const existing = readDraft(window.localStorage, key);
-    const fresh: ReportDraft = {
-      id: `draft_${membership.id}_${SAMPLE_PERIOD.id}`,
-      periodId: SAMPLE_PERIOD.id,
-      authorMembershipId: membership.id,
-      accomplishments: "",
-      challenges: "",
-      plans: "",
-      kpis: (templateFor(membership.space, SPACES) ?? SAMPLE_KPI_TEMPLATE).map(
-        (field) => ({ ...field, value: null }),
-      ),
-      attachments: [],
-      taggedMembershipIds: [],
-      location: null,
-      submissionStatus: "draft",
-      reviewStatus: "pending",
-      updatedAt: SAMPLE_NOW,
+    return () => {
+      cancelled = true;
     };
-    const draft = existing ?? fresh;
-    const nextForm = existing
-      ? formFromDraft(existing)
-      : emptyForm(membership.space);
-    setBase(draft);
-    setForm(nextForm);
-    setCounts(countsOf(nextForm));
-    if (existing) setSave({ kind: "saved" });
-  }, [alreadySubmitted, blocked, key, membership.id]);
+  }, [
+    blocked,
+    membership.id,
+    membership.space,
+    membership.spaceId,
+    refused,
+    reloadKey,
+    workspace.id,
+  ]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
+  /** Sends the draft. Never says Saved unless the server said so. */
   const persist = useCallback(
-    (next: Form) => {
-      if (!base) return;
-      const merged = draftFromForm(next, base);
-      const result = editTarget
-        ? writeEditCopy(
-            window.localStorage,
-            membership.id,
-            editTarget.id,
-            merged,
-          )
-        : writeDraft(window.localStorage, key, merged);
-      setBase(merged);
-      setSave(
-        result.ok
-          ? { kind: "saved" }
-          : { kind: "failed", message: result.message },
-      );
+    async (next: Form) => {
+      const current = baseRef.current;
+      if (!current || editTarget || closed) return;
+      const merged = draftFromForm(next, current);
+      const seq = ++saveSeq.current;
+      setSave({ kind: "saving" });
+      const result = await saveDraft(draftBody(merged));
+      if (seq !== saveSeq.current) return;
+      if (result.ok) {
+        setBase((was) => (was ? { ...was, id: result.data.id } : was));
+        setSave({ kind: "saved" });
+        setProblems([]);
+        setKpiProblems([]);
+        return;
+      }
+      const message = refused(result);
+      setSave({
+        kind: "failed",
+        message: message ?? "Not saved. Retry",
+      });
     },
-    [base, editTarget, key, membership.id],
+    [closed, editTarget, refused],
   );
 
   const flush = useCallback(() => {
@@ -428,8 +533,9 @@ export function SubmitReport() {
       timer.current = null;
     }
     if (pending.current) {
-      persist(pending.current);
+      const next = pending.current;
       pending.current = null;
+      void persist(next);
     }
   }, [persist]);
 
@@ -438,17 +544,17 @@ export function SubmitReport() {
       setForm((current) => {
         const next = { ...current, ...patch };
         pending.current = next;
-        setSave({ kind: "saving" });
+        if (!editTarget) setSave({ kind: "saving" });
         if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(() => {
           timer.current = null;
-          persist(next);
           pending.current = null;
+          void persist(next);
         }, debounceMs);
         return next;
       });
     },
-    [persist],
+    [editTarget, persist],
   );
 
   useEffect(() => {
@@ -463,22 +569,6 @@ export function SubmitReport() {
       flush();
     };
   }, [flush]);
-
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key !== key || !event.newValue) return;
-      try {
-        const other = JSON.parse(event.newValue) as ReportDraft;
-        if (base && Date.parse(other.updatedAt) > Date.parse(base.updatedAt)) {
-          setStaleElsewhere(true);
-        }
-      } catch {
-        /* @info - A malformed value is not worth a message; the save path is untouched. */
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [base, key]);
 
   const focusFirst = useCallback((field: FieldId) => {
     const selector =
@@ -505,10 +595,7 @@ export function SubmitReport() {
     }
     setKpiProblems([]);
 
-    const candidate: ReportDraft = {
-      ...draftFromForm(form, base),
-      submissionStatus: submissionStatusFor(SAMPLE_PERIOD, SAMPLE_NOW),
-    };
+    const candidate = draftFromForm(form, base);
     const blockers = submitBlockers(candidate);
     if (blockers.length > 0) {
       setProblems(blockers);
@@ -518,18 +605,18 @@ export function SubmitReport() {
     setProblems([]);
 
     setSubmitting(true);
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    pending.current = null;
+    saveSeq.current += 1;
 
     if (editTarget) {
-      // The window is checked again here: it can close between pressing Edit and saving.
-      const saved = await saveReport(
-        window.localStorage,
-        membership.id,
-        editTarget,
-        candidate,
-        SAMPLE_NOW,
-      );
-      if (!saved.success) {
-        setBanner(saved.error.message);
+      const saved = await editReport(editTarget.id, editBody(candidate));
+      if (!saved.ok) {
+        const message = refused(saved);
+        if (message) setBanner(message);
         setTextToCopy(
           [
             htmlToText(form.accomplishments),
@@ -542,30 +629,32 @@ export function SubmitReport() {
         setSubmitting(false);
         return;
       }
-      clearEditCopy(window.localStorage, membership.id, editTarget.id);
       router.push(`/dashboard/reports/${editTarget.id}`);
       return;
     }
 
-    const result = await submitReport(
-      window.localStorage,
-      membership.id,
-      candidate,
-    );
-    if (!result.success) {
-      setBanner(result.error.message);
+    /* @info - The last words are saved first, so what is submitted is what is on screen. */
+    const draft = await saveDraft(draftBody(candidate));
+    if (!draft.ok) {
+      const message = refused(draft);
+      if (message) setBanner(message);
+      setSubmitting(false);
+      return;
+    }
+    const result = await submitReport(draft.data.id);
+    if (!result.ok) {
+      const message = refused(result);
+      if (message) setBanner(message);
       setSubmitting(false);
       return;
     }
 
-    // Only a successful submit clears the draft.
-    clearDraftsFor(window.localStorage, membership.id);
     try {
       window.sessionStorage.setItem(
         SUBMITTED_KEY,
         JSON.stringify({
-          periodLabel: SAMPLE_PERIOD.label,
-          submissionStatus: candidate.submissionStatus,
+          periodLabel: period?.label ?? "",
+          submissionStatus: result.data.submissionStatus,
           reportId: result.data.id,
         }),
       );
@@ -573,7 +662,7 @@ export function SubmitReport() {
       /* @info - The confirmation is a nicety; blocked storage must not block the route. */
     }
     router.push("/dashboard");
-  }, [base, editTarget, focusFirst, form, membership.id, router, submitting]);
+  }, [base, editTarget, focusFirst, form, period, refused, router, submitting]);
 
   const setSection =
     (field: keyof Counts) => (html: string, characters: number) => {
@@ -625,18 +714,53 @@ export function SubmitReport() {
     );
   }
 
+  if (loaded.state === "loading") {
+    return (
+      <Shell>
+        <div aria-busy="true">
+          <span className="sr-only">Loading</span>
+          <div className="h-6 w-48 animate-pulse rounded bg-surface-muted" />
+          <div className="mt-4 h-40 animate-pulse rounded-2xl bg-surface-muted" />
+        </div>
+      </Shell>
+    );
+  }
+
+  if (loaded.state === "error") {
+    return (
+      <Shell>
+        <div role="alert" className="flex flex-col gap-2">
+          <h1 className="font-bold text-[22px] text-ink leading-[1.2] tracking-[-0.02em]">
+            The report could not be loaded
+          </h1>
+          <p className="max-w-[60ch] text-[14px] text-ink/60 leading-[1.6]">
+            {loaded.message}
+          </p>
+          <div>
+            <Button
+              onClick={() => setReloadKey((current) => current + 1)}
+              className="min-h-11 rounded-xl"
+            >
+              Retry
+            </Button>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
   // An edit handoff bypasses this screen: the author is correcting a Report, not
   // starting a second one for the period.
-  if (alreadySubmitted && !editTarget) {
+  if (submittedReport && !editTarget) {
     return (
       <Shell>
         <div>
           <StateCard
             title="Your report for this period is in"
-            body={`${SAMPLE_PERIOD.label} was submitted. Open it to see what a reviewer has said.`}
+            body={`${period?.label ?? "This period"} was submitted. Open it to see what a reviewer has said.`}
           />
           <Link
-            href={`/dashboard/reports/${ownSubmitted[0]?.id ?? ""}`}
+            href={`/dashboard/reports/${submittedReport.id}`}
             className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-ink px-3 text-[13px] text-surface"
           >
             Open report
@@ -652,7 +776,7 @@ export function SubmitReport() {
         <Button
           size="sm"
           onClick={onSubmit}
-          disabled={submitting}
+          disabled={submitting || (closed && !editTarget)}
           className="hidden h-8 gap-1.5 rounded-2xl bg-ink px-3 text-surface md:inline-flex"
         >
           {submitting
@@ -670,23 +794,28 @@ export function SubmitReport() {
           {editTarget ? "Edit report" : "Submit report"}
         </h1>
         <p className="max-w-[60ch] text-[14px] text-ink/60 leading-[1.6]">
-          {SAMPLE_PERIOD.label} · due{" "}
-          {new Intl.DateTimeFormat("en-GB", {
-            dateStyle: "medium",
-            timeStyle: "short",
-            timeZone: workspace.timeZone,
-          }).format(new Date(SAMPLE_PERIOD.dueAt))}{" "}
-          ({workspace.timeZone}).{" "}
+          {period && !editTarget
+            ? `${period.label}, due ${new Intl.DateTimeFormat("en-GB", {
+                dateStyle: "medium",
+                timeStyle: "short",
+                timeZone: workspace.timeZone,
+              }).format(new Date(period.dueAt))} (${workspace.timeZone}). `
+            : null}
           {editTarget
             ? "Nothing about the Report changes until you save."
             : `${user.name}, your draft saves as you type.`}
         </p>
       </header>
 
-      {staleElsewhere ? (
-        <p className="mt-4 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-[13px] text-ink">
-          This draft was updated in another tab. Reload before you keep typing,
-          or your changes here will be the older copy.
+      {closed ? (
+        <p
+          role="alert"
+          className="mt-4 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-[13px] text-ink"
+        >
+          {reportErrorMessage({
+            code: CODE_PERIOD_CLOSED,
+            message: "This period is closed.",
+          })}
         </p>
       ) : null}
 
@@ -723,7 +852,7 @@ export function SubmitReport() {
           setDrafting(true);
           try {
             const proposal = await requestSuggestion({
-              periodLabel: periodLabel(SAMPLE_PERIOD.id),
+              periodLabel: period?.label ?? "",
               spaceName: membership.space,
             });
             const typed = {
@@ -747,7 +876,7 @@ export function SubmitReport() {
               at: new Date().toISOString(),
               actorMembershipId: membership.id,
               action: "draft.requested",
-              target: SAMPLE_PERIOD.id,
+              target: period?.id ?? "",
               summary: "Drafting requested",
             });
           } catch {
@@ -991,6 +1120,12 @@ export function SubmitReport() {
           ) : null}
         </Card>
 
+        {problemsFor("attachments").map((problem) => (
+          <p key={problem.message} className="text-[12.5px] text-destructive">
+            {problem.message}
+          </p>
+        ))}
+
         <Card title="Colleagues">
           <p className="text-[12px] text-ink/60">
             Tag up to {COLLEAGUE_CAP} people. Search by name.
@@ -1021,6 +1156,14 @@ export function SubmitReport() {
           {colleagueNotice ? (
             <p className="mt-2 text-[12px] text-warning">{colleagueNotice}</p>
           ) : null}
+          {problemsFor("colleagues").map((problem) => (
+            <p
+              key={problem.message}
+              className="mt-2 text-[12.5px] text-destructive"
+            >
+              {problem.message}
+            </p>
+          ))}
           {colleagueResults === null ? (
             <p className="mt-2 text-[12px] text-ink/50">
               Nobody is listed until you search.
@@ -1077,7 +1220,7 @@ export function SubmitReport() {
           {form.taggedMembershipIds.length > 0 ? (
             <ul className="mt-3 flex list-none flex-wrap gap-1.5 p-0">
               {form.taggedMembershipIds.map((id) => {
-                const person = COLLEAGUES.find(
+                const person = people.find(
                   (entry) => entry.membershipId === id,
                 );
                 return (
@@ -1107,7 +1250,7 @@ export function SubmitReport() {
           <Card title="Location">
             <p className="text-[12px] text-ink/60">
               Optional. Your browser asks for permission once, and the
-              coordinates stay on this device in this build.
+              coordinates are saved with your report.
             </p>
             {form.location ? (
               <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -1159,18 +1302,26 @@ export function SubmitReport() {
           <output aria-live="polite" className="text-[12.5px] text-ink/60">
             {saveLabel}
           </output>
-          <span className="text-[12px] text-ink/45">
-            {
-              SUBMISSION_STATUS[submissionStatusFor(SAMPLE_PERIOD, SAMPLE_NOW)]
-                .label
-            }
-          </span>
+          {save.kind === "failed" && !closed && !editTarget ? (
+            <button
+              type="button"
+              onClick={() => void persist(form)}
+              className="min-h-11 rounded-xl border border-hairline px-3 text-[12.5px] text-ink"
+            >
+              Retry
+            </button>
+          ) : null}
+          {period && !editTarget && Date.now() > Date.parse(period.dueAt) ? (
+            <span className="text-[12px] text-ink/45">
+              {SUBMISSION_STATUS.late.label}
+            </span>
+          ) : null}
         </div>
 
         {/* The phone's copy of the one action: it arrives at the end of the page. */}
         <Button
           onClick={onSubmit}
-          disabled={submitting}
+          disabled={submitting || (closed && !editTarget)}
           className="h-12 w-full rounded-2xl bg-ink text-[15px] text-surface md:hidden"
         >
           {submitting
@@ -1187,14 +1338,13 @@ export function SubmitReport() {
 
   function runSearch() {
     const needle = colleagueQuery.trim().toLowerCase();
-    if (needle === "") {
-      setColleagueResults(COLLEAGUES.slice(0, 6));
-      return;
-    }
     setColleagueResults(
-      COLLEAGUES.filter((person) =>
-        person.name.toLowerCase().includes(needle),
-      ).slice(0, 6),
+      people
+        .filter(
+          (person) =>
+            needle === "" || person.name.toLowerCase().includes(needle),
+        )
+        .slice(0, 6),
     );
   }
 }

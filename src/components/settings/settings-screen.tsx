@@ -8,6 +8,11 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useShell } from "@/components/dashboard/shell-context";
+import {
+  ListSkeleton,
+  LoadError,
+  useApiLoad,
+} from "@/components/people/use-api-load";
 import { SAMPLE_NOW } from "@/data/reports";
 import { ROLE_LABEL } from "@/data/viewer";
 import { type AuditEntry, readAudit, recordAudit } from "@/lib/audit";
@@ -15,12 +20,15 @@ import { entitlement } from "@/lib/entitlements";
 import {
   activeBanner,
   aiSwitch,
+  appliesFromLabel,
   CADENCE_LABEL,
   type Cadence,
   type Schedule,
+  scheduleFields,
   scheduleProblem,
   scheduleSummary,
 } from "@/lib/settings";
+import { getSchedule, putSchedule } from "@/lib/schedule-api";
 import { cn } from "@/lib/utils";
 
 /** Settings is an Admin surface. A Head reaching it is told why they cannot use it. */
@@ -29,6 +37,10 @@ export function SettingsScreen() {
   const isAdmin = membership.role === "admin";
   const [notice, setNotice] = useState<string | null>(null);
 
+  const loaded = useApiLoad(
+    () => getSchedule(workspace.id),
+    `schedule:${workspace.id}`,
+  );
   const [schedule, setSchedule] = useState<Schedule>({
     cadence: "weekly",
     weekday: "Monday",
@@ -37,6 +49,17 @@ export function SettingsScreen() {
     dayOfMonth: null,
     lastDay: false,
   });
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [scheduleErrors, setScheduleErrors] = useState<Record<string, string>>(
+    {},
+  );
+
+  /* @info - The form starts from the active version the server sent. */
+  useEffect(() => {
+    if (loaded.value.state === "ready") {
+      setSchedule(scheduleFields(loaded.value.data));
+    }
+  }, [loaded.value]);
 
   const [aiEnabled, setAiEnabled] = useState(false);
   const [confirmAi, setConfirmAi] = useState(false);
@@ -86,6 +109,38 @@ export function SettingsScreen() {
           Workspace settings belong to an Admin. Ask {user.name.split(" ")[0]}'s
           Workspace Admin if something needs changing.
         </p>
+        <section className="mt-6 max-w-[720px]">
+          <h2 className="font-medium text-[14px] text-ink">
+            Reporting schedule
+          </h2>
+          {loaded.value.state === "loading" ? (
+            <ListSkeleton rows={1} />
+          ) : loaded.value.state === "error" ? (
+            <LoadError
+              status={loaded.value.status}
+              message={loaded.value.message}
+              onRetry={() => loaded.reload(true)}
+            />
+          ) : (
+            <>
+              <p className="mt-1 text-[12.5px] text-ink/70">
+                {CADENCE_LABEL[loaded.value.data.cadence]}, closing at{" "}
+                {loaded.value.data.time} ({loaded.value.data.timeZone}).
+              </p>
+              {loaded.value.data.pending ? (
+                <p className="mt-1 text-[12.5px] text-ink/60">
+                  {scheduleSummary(
+                    loaded.value.data.pending,
+                    appliesFromLabel(
+                      loaded.value.data.pending.effectiveFrom,
+                      loaded.value.data.pending.timeZone,
+                    ),
+                  )}
+                </p>
+              ) : null}
+            </>
+          )}
+        </section>
       </div>
     );
   }
@@ -130,120 +185,173 @@ export function SettingsScreen() {
           mid-period.
         </p>
 
-        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-          <label className="block text-[12px] text-ink/60">
-            Cadence
-            <select
-              value={schedule.cadence}
-              onChange={(event) =>
-                setSchedule((current) => ({
-                  ...current,
-                  cadence: event.target.value as Cadence,
-                }))
-              }
-              className="mt-1 min-h-11 w-full rounded-md border border-transparent bg-surface-muted px-3 text-[13px] text-ink outline-none focus-visible:border-ink/30"
+        {loaded.value.state === "loading" ? (
+          <ListSkeleton rows={2} />
+        ) : loaded.value.state === "error" ? (
+          <LoadError
+            status={loaded.value.status}
+            message={loaded.value.message}
+            onRetry={() => loaded.reload(true)}
+          />
+        ) : (
+          <>
+            {loaded.value.data.pending ? (
+              <p className="mt-2 rounded-md border border-hairline bg-surface-muted px-3 py-2 text-[12.5px] text-ink">
+                {scheduleSummary(
+                  loaded.value.data.pending,
+                  appliesFromLabel(
+                    loaded.value.data.pending.effectiveFrom,
+                    loaded.value.data.pending.timeZone,
+                  ),
+                )}
+              </p>
+            ) : null}
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <label className="block text-[12px] text-ink/60">
+                Cadence
+                <select
+                  value={schedule.cadence}
+                  onChange={(event) =>
+                    setSchedule((current) => ({
+                      ...current,
+                      cadence: event.target.value as Cadence,
+                    }))
+                  }
+                  className="mt-1 min-h-11 w-full rounded-md border border-transparent bg-surface-muted px-3 text-[13px] text-ink outline-none focus-visible:border-ink/30"
+                >
+                  {(Object.keys(CADENCE_LABEL) as Cadence[]).map((cadence) => (
+                    <option key={cadence} value={cadence}>
+                      {CADENCE_LABEL[cadence]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block text-[12px] text-ink/60">
+                Timezone
+                <input
+                  value={schedule.timeZone}
+                  onChange={(event) =>
+                    setSchedule((current) => ({
+                      ...current,
+                      timeZone: event.target.value,
+                    }))
+                  }
+                  className="mt-1 min-h-11 w-full rounded-md border border-transparent bg-surface-muted px-3 text-[13px] text-ink outline-none focus-visible:border-ink/30"
+                />
+              </label>
+
+              {(schedule.cadence === "weekly" ||
+                schedule.cadence === "fortnightly") && (
+                <label className="block text-[12px] text-ink/60">
+                  Day of the week
+                  <input
+                    value={schedule.weekday}
+                    onChange={(event) =>
+                      setSchedule((current) => ({
+                        ...current,
+                        weekday: event.target.value,
+                      }))
+                    }
+                    className="mt-1 min-h-11 w-full rounded-md border border-transparent bg-surface-muted px-3 text-[13px] text-ink outline-none focus-visible:border-ink/30"
+                  />
+                </label>
+              )}
+
+              {(schedule.cadence === "monthly" ||
+                schedule.cadence === "quarterly") && (
+                <label className="block text-[12px] text-ink/60">
+                  Day of the month
+                  <input
+                    inputMode="numeric"
+                    value={
+                      schedule.lastDay
+                        ? "last"
+                        : String(schedule.dayOfMonth ?? "")
+                    }
+                    onChange={(event) => {
+                      const raw = event.target.value.trim().toLowerCase();
+                      setSchedule((current) =>
+                        raw === "last"
+                          ? { ...current, lastDay: true, dayOfMonth: null }
+                          : {
+                              ...current,
+                              lastDay: false,
+                              dayOfMonth: Number(raw) || null,
+                            },
+                      );
+                    }}
+                    className="mt-1 min-h-11 w-full rounded-md border border-transparent bg-surface-muted px-3 text-[13px] text-ink outline-none focus-visible:border-ink/30"
+                  />
+                </label>
+              )}
+
+              <label className="block text-[12px] text-ink/60">
+                Time a period closes
+                <input
+                  type="time"
+                  value={schedule.time}
+                  onChange={(event) =>
+                    setSchedule((current) => ({
+                      ...current,
+                      time: event.target.value,
+                    }))
+                  }
+                  className="mt-1 min-h-11 w-full rounded-md border border-transparent bg-surface-muted px-3 text-[13px] text-ink outline-none focus-visible:border-ink/30"
+                />
+              </label>
+            </div>
+
+            {Object.keys(scheduleErrors).length > 0 ? (
+              <ul className="mt-2 list-none p-0">
+                {Object.entries(scheduleErrors).map(([field, message]) => (
+                  <li key={field} className="text-[12.5px] text-destructive">
+                    {message}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+
+            <button
+              type="button"
+              disabled={savingSchedule}
+              onClick={async () => {
+                const problem = scheduleProblem(schedule);
+                if (problem) {
+                  setNotice(problem);
+                  return;
+                }
+                setSavingSchedule(true);
+                setScheduleErrors({});
+                const result = await putSchedule(workspace.id, schedule);
+                setSavingSchedule(false);
+                if (!result.ok) {
+                  setScheduleErrors(result.fields ?? {});
+                  setNotice(result.fields ? null : result.message);
+                  return;
+                }
+                loaded.update(() => result.data);
+                setNotice(
+                  scheduleSummary(
+                    schedule,
+                    appliesFromLabel(
+                      result.data.appliesFrom,
+                      schedule.timeZone,
+                    ),
+                  ),
+                );
+              }}
+              className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-md bg-ink px-3 text-[12.5px] text-surface disabled:opacity-50"
             >
-              {(Object.keys(CADENCE_LABEL) as Cadence[]).map((cadence) => (
-                <option key={cadence} value={cadence}>
-                  {CADENCE_LABEL[cadence]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block text-[12px] text-ink/60">
-            Timezone
-            <input
-              value={schedule.timeZone}
-              onChange={(event) =>
-                setSchedule((current) => ({
-                  ...current,
-                  timeZone: event.target.value,
-                }))
-              }
-              className="mt-1 min-h-11 w-full rounded-md border border-transparent bg-surface-muted px-3 text-[13px] text-ink outline-none focus-visible:border-ink/30"
-            />
-          </label>
-
-          {(schedule.cadence === "weekly" ||
-            schedule.cadence === "fortnightly") && (
-            <label className="block text-[12px] text-ink/60">
-              Day of the week
-              <input
-                value={schedule.weekday}
-                onChange={(event) =>
-                  setSchedule((current) => ({
-                    ...current,
-                    weekday: event.target.value,
-                  }))
-                }
-                className="mt-1 min-h-11 w-full rounded-md border border-transparent bg-surface-muted px-3 text-[13px] text-ink outline-none focus-visible:border-ink/30"
+              <HugeiconsIcon
+                icon={CheckmarkCircle02Icon}
+                className="size-3.5"
               />
-            </label>
-          )}
-
-          {(schedule.cadence === "monthly" ||
-            schedule.cadence === "quarterly") && (
-            <label className="block text-[12px] text-ink/60">
-              Day of the month
-              <input
-                inputMode="numeric"
-                value={
-                  schedule.lastDay ? "last" : String(schedule.dayOfMonth ?? "")
-                }
-                onChange={(event) => {
-                  const raw = event.target.value.trim().toLowerCase();
-                  setSchedule((current) =>
-                    raw === "last"
-                      ? { ...current, lastDay: true, dayOfMonth: null }
-                      : {
-                          ...current,
-                          lastDay: false,
-                          dayOfMonth: Number(raw) || null,
-                        },
-                  );
-                }}
-                className="mt-1 min-h-11 w-full rounded-md border border-transparent bg-surface-muted px-3 text-[13px] text-ink outline-none focus-visible:border-ink/30"
-              />
-            </label>
-          )}
-
-          <label className="block text-[12px] text-ink/60">
-            Time a period closes
-            <input
-              type="time"
-              value={schedule.time}
-              onChange={(event) =>
-                setSchedule((current) => ({
-                  ...current,
-                  time: event.target.value,
-                }))
-              }
-              className="mt-1 min-h-11 w-full rounded-md border border-transparent bg-surface-muted px-3 text-[13px] text-ink outline-none focus-visible:border-ink/30"
-            />
-          </label>
-        </div>
-
-        <p className="mt-2 text-[12px] text-ink/55">
-          {scheduleSummary(schedule, "the period starting Mon 2 Nov 2026")}
-        </p>
-
-        <button
-          type="button"
-          onClick={() => {
-            const problem = scheduleProblem(schedule);
-            if (problem) {
-              setNotice(problem);
-              return;
-            }
-            write("schedule.change", scheduleSummary(schedule, "next period"));
-            setNotice("Saved. It takes effect from the next Reporting period.");
-          }}
-          className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-md bg-ink px-3 text-[12.5px] text-surface"
-        >
-          <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3.5" />
-          Save schedule
-        </button>
+              {savingSchedule ? "Saving" : "Save schedule"}
+            </button>
+          </>
+        )}
       </section>
 
       <section className="mt-8 max-w-[720px]">
