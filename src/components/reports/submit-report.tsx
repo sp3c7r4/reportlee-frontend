@@ -27,8 +27,31 @@ import {
   CODE_ALREADY_SUBMITTED,
   CODE_PERIOD_CLOSED,
 } from "@/lib/api-types";
+import { recordAudit } from "@/lib/audit";
+import {
+  gate,
+  mergeDraft,
+  requestSuggestion,
+  type Suggestion,
+} from "@/lib/drafting";
 import { listMembers } from "@/lib/members";
 import { pickSubmitPeriod } from "@/lib/periods";
+import {
+  ACCOMPLISHMENTS_MIN,
+  ATTACHMENT_MAX_FILES,
+  attachmentsRefusal,
+  COLLEAGUE_CAP,
+  type DraftProblem,
+  type FieldId,
+  htmlToText,
+  type KpiProblem,
+  type KpiRowInput,
+  normaliseKpiRows,
+  removeColleague,
+  sectionTone,
+  selectColleague,
+  submitBlockers,
+} from "@/lib/report-draft";
 import {
   groupFieldErrors,
   reportErrorMessage,
@@ -48,31 +71,8 @@ import {
   submitReport,
 } from "@/lib/reports-api";
 import { listSpaces } from "@/lib/spaces-api";
-import {
-  ACCOMPLISHMENTS_MIN,
-  ATTACHMENT_MAX_FILES,
-  attachmentsRefusal,
-  COLLEAGUE_CAP,
-  type DraftProblem,
-  type FieldId,
-  htmlToText,
-  type KpiProblem,
-  type KpiRowInput,
-  normaliseKpiRows,
-  removeColleague,
-  sectionTone,
-  selectColleague,
-  submitBlockers,
-} from "@/lib/report-draft";
 import { SUBMISSION_STATUS } from "@/lib/status";
 import { cn } from "@/lib/utils";
-import { recordAudit } from "@/lib/audit";
-import {
-  gate,
-  mergeDraft,
-  requestSuggestion,
-  type Suggestion,
-} from "@/lib/drafting";
 import { RichTextSection } from "./rich-text-section";
 
 /* @info - The whole form is tidy, not guarded: the server decides who may submit. The

@@ -5,10 +5,10 @@ import {
   activeBanner,
   aiSwitch,
   appliesFromLabel,
+  BANNER_ORDER,
   scheduleFields,
   scheduleProblem,
   scheduleSummary,
-  BANNER_ORDER,
 } from "../src/lib/settings.ts";
 
 /* @info - Workspace settings: one banner at a time, a schedule that names its timezone,

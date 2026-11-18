@@ -17,6 +17,7 @@ import { SAMPLE_NOW } from "@/data/reports";
 import { ROLE_LABEL } from "@/data/viewer";
 import { type AuditEntry, readAudit, recordAudit } from "@/lib/audit";
 import { entitlement } from "@/lib/entitlements";
+import { getSchedule, putSchedule } from "@/lib/schedule-api";
 import {
   activeBanner,
   aiSwitch,
@@ -28,7 +29,6 @@ import {
   scheduleProblem,
   scheduleSummary,
 } from "@/lib/settings";
-import { getSchedule, putSchedule } from "@/lib/schedule-api";
 import { cn } from "@/lib/utils";
 
 /** Settings is an Admin surface. A Head reaching it is told why they cannot use it. */
