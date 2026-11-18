@@ -57,16 +57,30 @@ export function homeFor(input: {
   own?: Report | null;
   hasDraft?: boolean;
   readOnly?: boolean;
+  /**
+   * The current period and the viewer's own Reports, from the server. When given, the
+   * header and the author's cards read these. The reviewer cards keep `reports` and
+   * `period`, which are still sample data until the review slice.
+   */
+  mine?: {
+    period: ReportingPeriod;
+    reports: Report[];
+    hasDraft: boolean;
+    now: string;
+  };
 }): HomeSummary {
   const { viewer, period, now } = input;
   const attention: AttentionItem[] = [];
   const decisions: DecisionRow[] = [];
+  const ownPeriod = input.mine?.period ?? period;
+  const ownReports = input.mine?.reports ?? input.reports;
+  const hasDraft = input.mine ? input.mine.hasDraft : input.hasDraft;
 
   const own =
     input.own === undefined
-      ? (input.reports.find(
+      ? (ownReports.find(
           (report) =>
-            report.periodId === period.id &&
+            report.periodId === ownPeriod.id &&
             report.authorMembershipId === viewer.membershipId &&
             report.submissionStatus !== "draft",
         ) ?? null)
@@ -76,11 +90,14 @@ export function homeFor(input: {
 
   // 1. An author's own Report, because it is the only thing only they can do.
   if (isAuthor && !input.readOnly) {
-    if (input.hasDraft) {
+    if (hasDraft) {
       attention.push({
         kind: "draft",
         title: "Pick up your draft",
-        detail: `${period.label} · saved on this device`,
+        /* @info - A server draft is not on this device, so it does not say so. */
+        detail: input.mine
+          ? `${ownPeriod.label} · not submitted yet`
+          : `${period.label} · saved on this device`,
         href: "/dashboard/reports/new",
         count: null,
       });
@@ -88,7 +105,7 @@ export function homeFor(input: {
       attention.push({
         kind: "submit",
         title: "Submit your Report",
-        detail: `${period.label} is open`,
+        detail: `${ownPeriod.label} is open`,
         href: "/dashboard/reports/new",
         count: null,
       });
@@ -164,7 +181,7 @@ export function homeFor(input: {
 
   // 4. Recent decisions on the viewer's own Reports, newest first.
   if (isAuthor && !input.readOnly) {
-    for (const report of input.reports) {
+    for (const report of ownReports) {
       if (report.authorMembershipId !== viewer.membershipId) continue;
       const last = [...report.events]
         .reverse()
@@ -175,7 +192,12 @@ export function homeFor(input: {
       decisions.push({
         id: report.id,
         label: last.kind === "approved" ? "Approved" : "Changes requested",
-        detail: period.label,
+        /* @info - Only the current period's label is known here, so an older Report
+           does not borrow it. */
+        detail:
+          !input.mine || report.periodId === ownPeriod.id
+            ? ownPeriod.label
+            : "An earlier period",
         href: `/dashboard/reports/${report.id}`,
       });
       if (decisions.length === 3) break;
@@ -184,9 +206,9 @@ export function homeFor(input: {
 
   return {
     period: {
-      label: period.label,
-      dueAt: period.dueAt,
-      isOpen: Date.parse(now) <= Date.parse(period.dueAt),
+      label: ownPeriod.label,
+      dueAt: ownPeriod.dueAt,
+      isOpen: Date.parse(input.mine?.now ?? now) <= Date.parse(ownPeriod.dueAt),
     },
     attention,
     decisions,

@@ -13,6 +13,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useShell } from "@/components/dashboard/shell-context";
+import { Button } from "@/components/ui/button";
 import { CO_LEAGUE_ROSTER } from "@/data/members";
 import {
   type Report,
@@ -22,7 +23,9 @@ import {
 } from "@/data/reports";
 import { SAMPLE_TASKS, type Task } from "@/data/tasks";
 import { type HomeViewer, homeFor } from "@/lib/home";
-import { draftKey, readDraft, savedReports } from "@/lib/reports";
+import { reportErrorMessage } from "@/lib/report-errors";
+import { savedReports } from "@/lib/reports";
+import { loadOwnReports, type OwnReports } from "@/lib/reports-api";
 import { cn } from "@/lib/utils";
 
 /**
@@ -51,17 +54,35 @@ export function HomeScreen() {
 
   const [reports, setReports] = useState<Report[] | null>(null);
   const [tasks, setTasks] = useState<Task[]>(SAMPLE_TASKS);
-  const [hasDraft, setHasDraft] = useState(false);
+  const [mine, setMine] = useState<(OwnReports & { now: string }) | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+
+  /* @info - The viewer's own Report and the current period come from the server. The
+     reviewer cards still read the sample data until the review slice. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: version is the retry trigger
+  useEffect(() => {
+    let cancelled = false;
+    setMine(null);
+    setFailure(null);
+    void loadOwnReports(workspace.id, {
+      drafts: membership.role !== "admin",
+    }).then((result) => {
+      if (cancelled) return;
+      if (!result.ok) {
+        setFailure(reportErrorMessage(result));
+        return;
+      }
+      setMine({ ...result.data, now: new Date().toISOString() });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [membership.role, version, workspace.id]);
 
   useEffect(() => {
     const saved = savedReports(window.localStorage, membership.id);
     setReports(SAMPLE_REPORTS.map((report) => saved[report.id] ?? report));
-    setHasDraft(
-      readDraft(
-        window.localStorage,
-        draftKey(membership.id, SAMPLE_PERIOD.id),
-      ) !== null,
-    );
     try {
       const raw = window.localStorage.getItem("reportlee.tasks");
       setTasks(raw ? (JSON.parse(raw) as Task[]) : SAMPLE_TASKS);
@@ -79,14 +100,14 @@ export function HomeScreen() {
         tasks,
         period: SAMPLE_PERIOD,
         now: SAMPLE_NOW,
-        hasDraft,
         readOnly: workspace.readOnly,
+        mine: mine ?? undefined,
       }),
-    [viewer, reports, tasks, hasDraft, workspace.readOnly],
+    [viewer, reports, tasks, mine, workspace.readOnly],
   );
 
   const firstName = user.name.split(" ")[0];
-  const loading = reports === null;
+  const loading = reports === null || (mine === null && failure === null);
 
   return (
     <div className="w-full px-4 py-6 sm:px-6">
@@ -95,11 +116,13 @@ export function HomeScreen() {
           <h1 className="font-bold text-[24px] text-ink tracking-[-0.03em]">
             {greeting()}, {firstName}
           </h1>
-          <p className="mt-1 text-[13px] text-ink/60">
-            {home.period.label} · due{" "}
-            {formatDeadline(home.period.dueAt, workspace.timeZone)}
-            {home.period.isOpen ? "" : " · closed"}
-          </p>
+          {mine ? (
+            <p className="mt-1 text-[13px] text-ink/60">
+              {home.period.label} · due{" "}
+              {formatDeadline(home.period.dueAt, workspace.timeZone)}
+              {home.period.isOpen ? "" : " · closed"}
+            </p>
+          ) : null}
         </div>
         <p className="text-[12px] text-ink/50">{workspace.name}</p>
       </header>
@@ -111,7 +134,21 @@ export function HomeScreen() {
         </p>
       ) : null}
 
-      {loading ? (
+      {failure ? (
+        <div
+          role="alert"
+          className="mt-4 rounded-lg border border-hairline p-4"
+        >
+          <p className="text-[13.5px] text-ink">{failure}</p>
+          <Button
+            variant="outline"
+            onClick={() => setVersion((current) => current + 1)}
+            className="mt-2 min-h-11 rounded-md px-3 text-[13px] sm:min-h-9"
+          >
+            Retry
+          </Button>
+        </div>
+      ) : loading ? (
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
           <div className="h-24 animate-pulse rounded-lg bg-surface-muted" />
           <div className="h-24 animate-pulse rounded-lg bg-surface-muted" />
@@ -187,7 +224,7 @@ export function HomeScreen() {
         </ul>
       )}
 
-      {home.decisions.length > 0 ? (
+      {mine && home.decisions.length > 0 ? (
         <section className="mt-6">
           <h2 className="font-medium text-[14px] text-ink">Recent decisions</h2>
           <ul className="mt-2 flex list-none flex-col gap-1.5 p-0">

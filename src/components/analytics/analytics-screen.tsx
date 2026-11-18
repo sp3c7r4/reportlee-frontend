@@ -3,10 +3,17 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useShell } from "@/components/dashboard/shell-context";
+import { Button } from "@/components/ui/button";
 import { CO_LEAGUE_ROSTER } from "@/data/members";
 import { SAMPLE_PERIOD, SAMPLE_REPORTS } from "@/data/reports";
 import { analyticsFor } from "@/lib/analytics";
+import { reportErrorMessage } from "@/lib/report-errors";
 import { savedReports } from "@/lib/reports";
+import {
+  loadOwnReports,
+  type OwnReports,
+  ownRecordFor,
+} from "@/lib/reports-api";
 import { cn } from "@/lib/utils";
 import { KpiCoverageChart } from "./kpi-coverage-chart";
 import { SubmissionChart } from "./submission-chart";
@@ -16,7 +23,7 @@ import { SubmissionChart } from "./submission-chart";
  * sample says so, and the table view is a first-class way to read the same numbers.
  */
 export function AnalyticsScreen({ scope }: { scope: "workspace" | "me" }) {
-  const { membership } = useShell();
+  const { membership, workspace } = useShell();
   const [showTable, setShowTable] = useState(false);
 
   const viewer = useMemo(
@@ -30,24 +37,53 @@ export function AnalyticsScreen({ scope }: { scope: "workspace" | "me" }) {
 
   const [mounted, setMounted] = useState(false);
   const [reports, setReports] = useState<typeof SAMPLE_REPORTS | null>(null);
+  const [mine, setMine] = useState<OwnReports | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
+    if (scope === "me") return;
     // The device-local overlay is read after mount, never during a prerender.
     const saved = savedReports(window.localStorage, membership.id);
     setReports(SAMPLE_REPORTS.map((report) => saved[report.id] ?? report));
     setMounted(true);
-  }, [membership.id]);
+  }, [membership.id, scope]);
+
+  /* @info - My record is the viewer's own Reports, which the server has. Workspace and
+     Space analytics stay on the sample data until the analytics slice. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: version is the retry trigger
+  useEffect(() => {
+    if (scope !== "me") return;
+    let cancelled = false;
+    setMounted(false);
+    setFailure(null);
+    void loadOwnReports(workspace.id, { drafts: false }).then((result) => {
+      if (cancelled) return;
+      if (result.ok) setMine(result.data);
+      else setFailure(reportErrorMessage(result));
+      setMounted(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [scope, version, workspace.id]);
 
   const view = useMemo(
     () =>
-      analyticsFor({
-        viewer,
-        reports: reports ?? [],
-        roster: CO_LEAGUE_ROSTER,
-        period: SAMPLE_PERIOD,
-        spaceFilter: null,
-      }),
-    [viewer, reports],
+      scope === "me"
+        ? ownRecordFor({
+            viewer,
+            period: mine?.period ?? SAMPLE_PERIOD,
+            reports: mine?.reports ?? [],
+          })
+        : analyticsFor({
+            viewer,
+            reports: reports ?? [],
+            roster: CO_LEAGUE_ROSTER,
+            period: SAMPLE_PERIOD,
+            spaceFilter: null,
+          }),
+    [mine, reports, scope, viewer],
   );
 
   const isMe = view.scope === "me";
@@ -60,6 +96,9 @@ export function AnalyticsScreen({ scope }: { scope: "workspace" | "me" }) {
           <h1 className="font-bold text-[24px] text-ink tracking-[-0.03em]">
             {heading}
           </h1>
+          {scope === "me" && mine ? (
+            <p className="mt-1 text-[13px] text-ink/60">{mine.period.label}</p>
+          ) : null}
         </div>
         <button
           type="button"
@@ -78,6 +117,20 @@ export function AnalyticsScreen({ scope }: { scope: "workspace" | "me" }) {
 
       {!mounted ? (
         <div className="mt-4 h-24 animate-pulse rounded-lg bg-surface-muted" />
+      ) : failure ? (
+        <div
+          role="alert"
+          className="mt-4 rounded-lg border border-hairline p-4"
+        >
+          <p className="text-[13.5px] text-ink">{failure}</p>
+          <Button
+            variant="outline"
+            onClick={() => setVersion((current) => current + 1)}
+            className="mt-2 min-h-11 rounded-md px-3 text-[13px] sm:min-h-9"
+          >
+            Retry
+          </Button>
+        </div>
       ) : (
         <>
           {view.lockedReason ? (

@@ -5,6 +5,11 @@
  */
 
 import type { Report, ReportDraft, ReportingPeriod } from "../data/reports.ts";
+import {
+  type AnalyticsView,
+  type AnalyticsViewer,
+  analyticsFor,
+} from "./analytics.ts";
 import { type ApiResult, apiCall } from "./api.ts";
 import { draftBody } from "./reports.ts";
 
@@ -134,6 +139,66 @@ export function deleteReport(id: string): Promise<ApiResult<undefined>> {
     undefined,
     "We could not delete that report. Try again.",
   );
+}
+
+/** What Home and My record need from the server about the caller's own Reports. */
+export type OwnReports = {
+  period: ReportingPeriod;
+  /** The caller's submitted and late Reports, newest first, at most one page. */
+  reports: Report[];
+  /** True when the caller has a server draft for `period`. */
+  hasDraft: boolean;
+};
+
+/* @info - One page is enough here: Home reads the current period and the last three
+   decisions, and the list is newest first. My reports pages through the rest. */
+const OWN_PAGE = 50;
+
+/**
+ * The current period and the caller's own Reports for one Workspace. An Admin authors
+ * nothing, so the caller skips the drafts call for one (`drafts: false`).
+ */
+export async function loadOwnReports(
+  workspaceId: string,
+  options: { drafts: boolean },
+): Promise<ApiResult<OwnReports>> {
+  const [current, reports, drafts] = await Promise.all([
+    getCurrentPeriod(workspaceId),
+    listMyReports(workspaceId, { limit: OWN_PAGE, offset: 0 }),
+    options.drafts ? listMyDrafts(workspaceId) : Promise.resolve(null),
+  ]);
+  if (!current.ok) return current;
+  if (!reports.ok) return reports;
+  if (drafts && !drafts.ok) return drafts;
+  const period = current.data;
+  return {
+    ok: true,
+    status: reports.status,
+    data: {
+      period,
+      reports: reports.data,
+      hasDraft: (drafts?.data ?? []).some(
+        (draft) => draft.periodId === period.id,
+      ),
+    },
+  };
+}
+
+/**
+ * My record: the viewer's own figures for the current period, whatever their role.
+ * No roster, so no other person's name can appear in it.
+ */
+export function ownRecordFor(input: {
+  viewer: AnalyticsViewer;
+  period: ReportingPeriod;
+  reports: Report[];
+}): AnalyticsView {
+  return analyticsFor({
+    viewer: { ...input.viewer, role: "staff" },
+    reports: input.reports,
+    roster: [],
+    period: input.period,
+  });
 }
 
 /** Splits a draft body into the edit body: the period is fixed once a report exists. */
