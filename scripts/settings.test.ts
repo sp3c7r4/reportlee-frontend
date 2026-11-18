@@ -4,6 +4,8 @@ import { SAMPLE_NOW } from "../src/data/reports.ts";
 import {
   activeBanner,
   aiSwitch,
+  appliesFromLabel,
+  scheduleFields,
   scheduleProblem,
   scheduleSummary,
   BANNER_ORDER,
@@ -157,4 +159,38 @@ test("the AI switch applies at once and is gated by the plan and the switch", ()
   );
   assert.equal(aiSwitch({ plan: "team", aiEnabled: true }).allowed, true);
   assert.equal(aiSwitch({ plan: "enterprise", aiEnabled: true }).allowed, true);
+});
+
+test("the change date is read in the Schedule's timezone, not the reader's", () => {
+  /* 2026-11-01T23:00Z is Monday 2 November 00:00 in Lagos, still Sunday in London. */
+  assert.equal(
+    appliesFromLabel("2026-11-01T23:00:00.000Z", "Africa/Lagos"),
+    "Mon, 2 Nov 2026",
+  );
+  assert.equal(
+    appliesFromLabel("2026-11-01T23:00:00.000Z", "Europe/London"),
+    "Sun, 1 Nov 2026",
+  );
+});
+
+test("scheduleFields keeps the six fields and drops what the API adds", () => {
+  const fields = scheduleFields({
+    cadence: "monthly",
+    weekday: "",
+    time: "17:00",
+    timeZone: "Africa/Lagos",
+    dayOfMonth: 15,
+    lastDay: false,
+    effectiveFrom: null,
+    pending: null,
+  } as Parameters<typeof scheduleFields>[0]);
+  assert.deepEqual(Object.keys(fields).sort(), [
+    "cadence",
+    "dayOfMonth",
+    "lastDay",
+    "time",
+    "timeZone",
+    "weekday",
+  ]);
+  assert.equal(fields.dayOfMonth, 15);
 });

@@ -1,15 +1,13 @@
 import type { Report, ReportDraft } from "../data/reports.ts";
-import { auditSummary, recordAudit } from "./audit.ts";
-import type { ReportStatus, SubmissionStatus } from "./status.ts";
 
 /**
- * Draft storage and the report calls.
+ * Report state kept on this device, and the draft body the server accepts.
  *
- * The calls below are the documented contract: `GET /api/v1/reporting-periods/current`,
- * `GET /api/v1/reports/draft`, `PATCH /api/v1/reports/draft`,
- * `POST /api/v1/reports/:id/submit`. Nothing answers them yet, so a `simulate*`
- * function does, the same way `src/lib/auth.ts` answers auth. Wiring the backend is
- * the flag plus these paths, not a rewrite.
+ * The report calls live in `reports-api.ts` and answer from the real API. The server
+ * owns drafts, submits, edits and deletes, so the Submit and My reports screens no
+ * longer use the draft, edit copy or hidden helpers below. They stay because the
+ * sign out path clears what earlier builds left behind, and the mock screens still
+ * read `savedReports`.
  *
  * `Storage` is injected so the failure path (quota, private mode, a broken browser)
  * is testable without one.
@@ -204,10 +202,6 @@ export function draftBody(draft: ReportDraft) {
  */
 export const SUBMITTED_KEY = "reportlee.report.submitted";
 
-export type ApiResult<T> =
-  | { success: true; data: T }
-  | { success: false; error: { message: string } };
-
 export function readEditCopy(
   storage: StorageLike,
   membershipId: string,
@@ -238,11 +232,9 @@ export function clearEditCopy(
 }
 
 /**
- * `GET /api/v1/reports?periodId=&status=` and `GET /api/v1/reports/:id`, simulated over
- * the sample rows. The server decides which rows a person may see; here the rows are
- * already the Membership's own.
+ * Reports saved on this device by the mock screens (Home, Review, Analytics). The
+ * Submit and My reports screens read the server instead. Cleared on sign out.
  */
-/** Edits live on this device until the server owns them. Cleared on sign out. */
 export function savedReports(
   storage: StorageLike,
   membershipId: string,
@@ -253,160 +245,4 @@ export function savedReports(
   } catch {
     return {};
   }
-}
-
-export async function loadReports(
-  storage: StorageLike,
-  membershipId: string,
-  hidden: string[],
-): Promise<ApiResult<Report[]>> {
-  const { SAMPLE_REPORTS } = await import("../data/reports.ts");
-  const saved = savedReports(storage, membershipId);
-  return {
-    success: true,
-    data: SAMPLE_REPORTS.filter((report) => !hidden.includes(report.id)).map(
-      (report) => saved[report.id] ?? report,
-    ),
-  };
-}
-
-export async function loadReport(
-  storage: StorageLike,
-  membershipId: string,
-  id: string,
-  hidden: string[],
-): Promise<ApiResult<Report>> {
-  const { reportById } = await import("../data/reports.ts");
-  const report = savedReports(storage, membershipId)[id] ?? reportById(id);
-  if (!report || hidden.includes(id)) {
-    return {
-      success: false,
-      error: { message: "That Report could not be found." },
-    };
-  }
-  return { success: true, data: report };
-}
-
-/**
- * `PATCH /api/v1/reports/:id`, simulated. Saves an edit, records one revision with the
- * previous content, and adds the Edited event. A closed window is refused here.
- */
-export async function saveReport(
-  storage: StorageLike,
-  membershipId: string,
-  report: Report,
-  draft: ReportDraft,
-  now: string,
-): Promise<ApiResult<Report>> {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const lock = report.windowStartedAt
-    ? Date.parse(report.windowStartedAt) + report.editWindowMinutes * 60_000
-    : null;
-  const locked =
-    report.reviewStatus === "approved" ||
-    (lock !== null &&
-      Date.parse(now) > lock &&
-      report.reviewStatus !== "rejected");
-
-  if (locked) {
-    return {
-      success: false,
-      error: { message: "This Report is locked: the edit window has closed." },
-    };
-  }
-
-  const updated: Report = {
-    ...report,
-    ...draft,
-    reviewStatus: "pending",
-    revisions: [
-      ...report.revisions,
-      {
-        at: now,
-        previous: {
-          accomplishments: report.accomplishments,
-          challenges: report.challenges,
-          plans: report.plans,
-          kpis: report.kpis,
-          attachments: report.attachments,
-          taggedMembershipIds: report.taggedMembershipIds,
-          location: report.location,
-        },
-      },
-    ],
-    events: [
-      ...report.events,
-      {
-        kind: "edited",
-        at: now,
-        actorMembershipId: report.authorMembershipId,
-      },
-    ],
-    updatedAt: now,
-  };
-
-  try {
-    storage.setItem(
-      `${SAVED_PREFIX}.${membershipId}`,
-      JSON.stringify({
-        ...savedReports(storage, membershipId),
-        [report.id]: updated,
-      }),
-    );
-  } catch {
-    return {
-      success: false,
-      error: { message: "That could not be saved on this device." },
-    };
-  }
-
-  recordAudit(storage, membershipId, {
-    at: now,
-    actorMembershipId: report.authorMembershipId,
-    action: "edited",
-    target: report.id,
-    summary: auditSummary("edited", "", `Revision ${updated.revisions.length}`),
-  });
-
-  return { success: true, data: updated };
-}
-
-/**
- * `POST /api/v1/reports/:id/submit`, simulated. The server sets the review status to
- * pending and decides late from the deadline; this body stands in until it exists.
- */
-export async function submitReport(
-  storage: StorageLike,
-  membershipId: string,
-  draft: ReportDraft,
-): Promise<
-  ApiResult<{
-    id: string;
-    submissionStatus: SubmissionStatus;
-    reviewStatus: ReportStatus;
-  }>
-> {
-  await new Promise((resolve) => setTimeout(resolve, 350));
-  if (draft.accomplishments.trim() === "") {
-    return {
-      success: false,
-      error: { message: "The report could not be submitted. Try again." },
-    };
-  }
-  recordAudit(storage, membershipId, {
-    at: new Date().toISOString(),
-    actorMembershipId: membershipId,
-    action: "submitted",
-    target: draft.id,
-    summary: auditSummary("submitted", "", "Submitted"),
-  });
-
-  return {
-    success: true,
-    data: {
-      id: draft.id,
-      submissionStatus: draft.submissionStatus,
-      reviewStatus: "pending",
-    },
-  };
 }

@@ -93,6 +93,18 @@ export function listMyReports(
   );
 }
 
+/** The caller's own drafts (`status=draft`), newest change first. */
+export function listMyDrafts(
+  workspaceId: string,
+): Promise<ApiResult<ReportDraft[]>> {
+  return apiCall(
+    "GET",
+    `/reports?workspaceId=${encodeURIComponent(workspaceId)}&status=draft`,
+    undefined,
+    "We could not load your drafts. Try again.",
+  );
+}
+
 export function getReport(id: string): Promise<ApiResult<Report>> {
   return apiCall(
     "GET",

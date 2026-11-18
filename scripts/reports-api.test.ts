@@ -12,6 +12,7 @@ import {
   getDraft,
   getOpenPeriods,
   getReport,
+  listMyDrafts,
   listMyReports,
   saveDraft,
   submitReport,
@@ -172,6 +173,13 @@ test("listMyReports builds the query, encoded, and leaves out what is not set", 
       "/reports?workspaceId=12&periodId=4%201&limit=50&offset=100",
     ),
   );
+});
+
+test("listMyDrafts asks for status=draft only", async () => {
+  const calls = stub(200, { data: [draft] });
+  const result = await listMyDrafts("12");
+  assert.ok(calls[0].url.endsWith("/reports?workspaceId=12&status=draft"));
+  assert.equal(result.ok && result.data[0].submissionStatus, "draft");
 });
 
 test("getReport and editReport use the id path", async () => {

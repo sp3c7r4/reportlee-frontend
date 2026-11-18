@@ -71,6 +71,29 @@ export function scheduleSummary(
   return `${CADENCE_LABEL[schedule.cadence]}, starting ${when} at ${schedule.time} (${schedule.timeZone}). Takes effect from ${nextPeriod}.`;
 }
 
+/** The six editable fields, dropping what the API adds around them. */
+export function scheduleFields(source: Schedule): Schedule {
+  return {
+    cadence: source.cadence,
+    weekday: source.weekday,
+    time: source.time,
+    timeZone: source.timeZone,
+    dayOfMonth: source.dayOfMonth,
+    lastDay: source.lastDay,
+  };
+}
+
+/** The day a change starts, in the Schedule's own timezone, for `scheduleSummary`. */
+export function appliesFromLabel(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone,
+  }).format(new Date(iso));
+}
+
 export type BannerKind = "readOnly" | "pastDue" | "grace" | "trial";
 
 /** The most urgent first. One banner shows, never two. */

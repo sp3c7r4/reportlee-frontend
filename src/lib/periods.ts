@@ -33,3 +33,16 @@ export function pickSubmitPeriod(
     .sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt));
   return waiting[0] ?? current;
 }
+
+/**
+ * The period's label when one of the known periods matches, else a plain fallback.
+ * A Report carries only its period id, so older periods have no label to show.
+ */
+export function periodTitle(
+  periodId: string,
+  known: readonly ReportingPeriod[],
+): string {
+  return (
+    known.find((period) => period.id === periodId)?.label ?? "Reporting period"
+  );
+}

@@ -37,7 +37,7 @@ export type Attachment = {
   name: string;
   size: number;
   type: string;
-  /** Always false in this build: nothing leaves the machine. */
+  /** Always false: the API stores attachment metadata only, no file is uploaded yet. */
   uploaded: boolean;
 };
 

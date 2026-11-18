@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ReportingPeriod } from "../src/data/reports.ts";
-import { GRACE_MS, isOpen, pickSubmitPeriod } from "../src/lib/periods.ts";
+import {
+  GRACE_MS,
+  isOpen,
+  periodTitle,
+  pickSubmitPeriod,
+} from "../src/lib/periods.ts";
 
 const week = (id: string, start: string, due: string): ReportingPeriod => ({
   id,
@@ -58,6 +63,11 @@ test("isOpen: the grace is exactly 7 days after the deadline", () => {
     isOpen(older, new Date(due + GRACE_MS + 1).toISOString()),
     false,
   );
+});
+
+test("periodTitle uses a known label, else a plain fallback", () => {
+  assert.equal(periodTitle("41", [older, newer]), "Week 41");
+  assert.equal(periodTitle("7", [older]), "Reporting period");
 });
 
 test("isOpen: not open before the period starts", () => {
