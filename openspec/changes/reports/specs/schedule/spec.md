@@ -44,10 +44,10 @@ The system SHALL apply a Schedule change from the first period that starts after
 - **WHEN** a Schedule change is saved
 - **THEN** the response states the date and time from which it applies
 ### Requirement: The Schedule owns its time zone
-The system SHALL keep the Schedule's time zone from the moment the Schedule exists, and a change to the Workspace's own time zone SHALL NOT move any period. A Schedule time zone SHALL change only through a Schedule change by an Admin.
-#### Scenario: Workspace zone changed before any period exists
-- **WHEN** an Admin changes the Workspace time zone and nobody has asked for a period yet
-- **THEN** the Schedule keeps the zone the Workspace had before the change
+The system SHALL keep the Schedule's time zone once the first period exists or an Admin has saved a Schedule, and a change to the Workspace's own time zone SHALL NOT move any period. Before that, the default Schedule SHALL follow the Workspace time zone. After that, a Schedule time zone SHALL change only through a Schedule change by an Admin.
+#### Scenario: Workspace zone corrected before any period exists
+- **WHEN** an Admin changes the Workspace time zone, nobody has asked for a period yet and no Schedule was saved
+- **THEN** the default Schedule uses the new Workspace time zone
 #### Scenario: Workspace zone changed later
 - **WHEN** an Admin changes the Workspace time zone after periods exist
 - **THEN** every existing period and the Schedule time zone are unchanged

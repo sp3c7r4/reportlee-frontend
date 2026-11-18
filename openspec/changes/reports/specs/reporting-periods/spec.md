@@ -54,10 +54,13 @@ The system SHALL report as current the earliest period whose deadline has not pa
 - **THEN** the response is 404
 
 ### Requirement: Submissions are accepted for 7 days after the deadline
-The system SHALL accept a submission for a period until 7 days (168 hours) after its deadline. After that the period is closed and a report that was never submitted counts as missing. The grace SHALL NOT be configurable. The system SHALL list every open period, so a person can reach a late period once the current one has moved on.
+The system SHALL accept a submission for a period until 7 days (168 hours) after its deadline. After that the period is closed and a report that was never submitted counts as missing. The grace SHALL NOT be configurable. The system SHALL list every open period, so a person can reach a late period once the current one has moved on. A period that ended before the Workspace was created SHALL NOT be listed as open, except the current period.
 #### Scenario: Open periods
 - **WHEN** it is Wednesday 28 October 2026 and the Schedule is the default
 - **THEN** the open periods are the weeks of 19 October and 26 October, oldest first
+#### Scenario: Workspace created mid-week
+- **WHEN** a Workspace is created on Wednesday 28 October 2026 with the default Schedule
+- **THEN** the only open period is the week of 26 October, and the week of 19 October is not asked for
 #### Scenario: Closed
 - **WHEN** it is more than 168 hours after a period's deadline
 - **THEN** the period is not listed as open and a submission for it is refused

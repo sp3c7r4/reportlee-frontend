@@ -43,3 +43,6 @@ The system SHALL let only the author edit or delete a report. A reviewer who can
 #### Scenario: Stranger edits
 - **WHEN** a member with no access edits a report
 - **THEN** the response is 404
+#### Scenario: Stranger submits another member's draft
+- **WHEN** a member submits a draft that belongs to someone else, by its id
+- **THEN** the response is 404, the same as for an id that never existed
