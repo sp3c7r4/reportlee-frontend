@@ -11,12 +11,12 @@
 - [x] BE-6 Backend Gate 3: `npx biome check <touched files>` (never `biome:lint` or `biome:format`), `npx tsc --noEmit`, `npm run check:circular`, once `npm test`, then `npm run build`, with durations. Paste under Validation. Commit per step in the repo's git log style. No push.
 
 ## 3. Frontend (repo `reportlee-frontend`, branch `feat/reports`)
-- [ ] FE-1 `src/lib/api-types.ts` types and code constants, `src/lib/reports-api.ts`, `src/lib/schedule-api.ts`, `src/lib/periods.ts`, with `scripts/reports-api.test.ts` (including dotted field keys mapped by first segment), `scripts/schedule-api.test.ts`, `scripts/periods.test.ts` red first, and `scripts/report-text.cases.json` run by `scripts/report-draft.test.ts` against `htmlToText`. Verify: `npm test`.
-- [ ] FE-2 Retire the simulated functions in `src/lib/reports.ts`, keeping every export a mock screen imports. Update `scripts/report-storage.test.ts` and `scripts/report-view.test.ts` with equivalents, deleting none. Verify: `npm test`, `npx tsc --noEmit`.
-- [ ] FE-3 `submit-report.tsx`: loading, autosave states, field errors, late, closed, Admin, read-only, `NO_SPACE` and edit states; colleague picker from `listMembers`; no `localStorage` draft backup; submitted-report reload through `listMyReports` with `periodId`. Verify: `npx tsc --noEmit`, manual pass.
-- [ ] FE-4 `report-view.tsx` and `report-timeline.tsx`: list (loading, empty, error, load more) and detail (not found, retry, delete confirm, server answer wins). Verify: `npx tsc --noEmit`, manual pass.
-- [ ] FE-5 `settings-screen.tsx` schedule: Admin form with `getSchedule` and `putSchedule`, read-only for Staff and Head, `appliesFrom` shown, pending note. Verify: `npx tsc --noEmit`, manual pass.
-- [ ] FE-6 Frontend Gate 3: `npx biome check <touched files>`, `npx tsc --noEmit`, `npm test`, `npm run build`, `rg -n "[\u2014\u2013]" <touched files>`. Paste under Validation. Commit per step. No push.
+- [x] FE-1 `src/lib/api-types.ts` types and code constants, `src/lib/reports-api.ts`, `src/lib/schedule-api.ts`, `src/lib/periods.ts`, with `scripts/reports-api.test.ts` (including dotted field keys mapped by first segment), `scripts/schedule-api.test.ts`, `scripts/periods.test.ts` red first, and `scripts/report-text.cases.json` run by `scripts/report-draft.test.ts` against `htmlToText`. Verify: `npm test`.
+- [x] FE-2 Retire the simulated functions in `src/lib/reports.ts`, keeping every export a mock screen imports. Update `scripts/report-storage.test.ts` and `scripts/report-view.test.ts` with equivalents, deleting none. Verify: `npm test`, `npx tsc --noEmit`.
+- [x] FE-3 `submit-report.tsx`: loading, autosave states, field errors, late, closed, Admin, read-only, `NO_SPACE` and edit states; colleague picker from `listMembers`; no `localStorage` draft backup; submitted-report reload through `listMyReports` with `periodId`. Verify: `npx tsc --noEmit`, manual pass.
+- [x] FE-4 `report-view.tsx` and `report-timeline.tsx`: list (loading, empty, error, load more) and detail (not found, retry, delete confirm, server answer wins). Verify: `npx tsc --noEmit`, manual pass.
+- [x] FE-5 `settings-screen.tsx` schedule: Admin form with `getSchedule` and `putSchedule`, read-only for Staff and Head, `appliesFrom` shown, pending note. Verify: `npx tsc --noEmit`, manual pass.
+- [x] FE-6 Frontend Gate 3: `npx biome check <touched files>`, `npx tsc --noEmit`, `npm test`, `npm run build`, `rg -n "[\u2014\u2013]" <touched files>`. Paste under Validation. Commit per step. No push.
 
 ## 4. Review, live check, close
 - [ ] REV-1 Gate 4 fresh-context review (three lanes, aggregator last), max 3 rounds.
@@ -84,6 +84,30 @@ npm audit --omit=dev                        -> 4 high, all pre-existing (dotenvx
 em/en dash search over the 47 changed files -> 1 hit: src/db/postgres.schema.ts:1, a code comment that was there before. No user-facing hit
 ```
 The API on :5000 and the email worker were left running. No email was sent: the tests use the queue recorder, and every address is `@example.com`.
+
+### Frontend build (repo `reportlee-frontend`, branch `feat/reports`), 2026-11-18
+Commits are listed in the final report (FE-1 API layer, FE-2 to FE-5 lib and screens).
+
+What changed:
+- `src/lib/reports-api.ts` (E3 to E11, plus `listMyDrafts` for `status=draft`), `src/lib/schedule-api.ts` (E1, E2), `src/lib/periods.ts` (`pickSubmitPeriod`, `isOpen`, `periodTitle`), `src/lib/report-errors.ts` (code to message, dotted field keys grouped by first segment, `submitBlock`), `src/lib/api-types.ts` (`ApiSchedule`, `ApiScheduleSaved`, eleven `CODE_*`), `src/lib/settings.ts` (`scheduleFields`, `appliesFromLabel`).
+- `src/lib/reports.ts`: removed the simulated `loadReports`, `loadReport`, `saveReport`, `submitReport` and the local `ApiResult`. Kept every export a mock screen or sign out imports (`savedReports`, `draftKey`, `readDraft`, `SAVED_PREFIX`, handoff, hidden, edit copy, `clearReportStateFor`). No test covered the removed functions; `report-storage.test.ts` and `report-view.test.ts` still cover the kept helpers and pass unchanged.
+- `submit-report.tsx`: period from `getOpenPeriods`/`getCurrentPeriod` through `pickSubmitPeriod`, draft from `getDraft`, KPI rows from the draft or the Space template (`listSpaces`), colleagues from `listMembers`, autosave through `saveDraft` 1500 ms after the last change (Saving, Saved just now, Not saved with Retry; an older answer cannot overwrite a newer one), submit saves then calls `submitReport`, edit through `editReport` (the handoff from the report page). States: loading, load error with Retry, Admin, read-only, no Space, already submitted, period closed (Submit disabled), field errors beside the field, coded refusals as a banner. `ALREADY_SUBMITTED` reloads. No `localStorage` draft backup and no `SAMPLE_*` or `COLLEAGUES` reads.
+- `report-view.tsx`: list from `listMyReports` in pages of 50 with Load more, draft link from `listMyDrafts`, loading, empty ("You have not submitted a report yet." with a link), error with Retry. Detail from `getReport`: loading, "Report not found" on any 404, error with Retry, delete through `deleteReport` with confirmation, the server's refusal shown in place. Reading writes nothing (the local `seenOnOpen` write is gone). Comments are not posted (review slice).
+- `settings-screen.tsx`: `getSchedule` loads the form, `putSchedule` saves it; field errors listed, saving state, "Takes effect from <appliesFrom in the Schedule time zone>", pending change shown as a note; Staff and Head see a read-only summary with loading and error states.
+- `src/data/reports.ts`: comment-only change on `Attachment.uploaded`. My record unchanged (D23).
+
+Checks (touched files only; never `npm run format`; no `.env*` read; API and worker left running):
+```
+npx biome format --write <13 touched files>   -> formatted, 1 file fixed
+npx biome lint <13 touched files>             -> "Checked 13 files", exit 0, 21s
+npx tsc --noEmit                              -> exit 0 (57s; 6m31s on the last run, machine slow)
+npm test                                      -> 311 tests, 311 pass, 0 fail, 42s
+npm run build                                 -> exit 0, all routes built, 4m20s
+U+2014 / U+2013 search over the touched files -> 0 hits (Select-String, no rg on this machine)
+```
+Red then green: `scripts/reports-api.test.ts`, `schedule-api.test.ts`, `periods.test.ts` and `report-errors.test.ts` failed with "module not found" before their modules existed. The shared `report-text.cases.json` (copied byte for byte from the backend fixture) runs in `report-draft.test.ts` against `htmlToText`: 11 cases pass. One failure on the way: `appliesFromLabel` expected "Mon 2 Nov 2026", but Node's ICU gives "Mon, 2 Nov 2026". The test's expected string was wrong, so it was corrected. The date and time zone assertion did not change. The first build failed on a stray `"use client"` left by a bad splice in `submit-report.tsx`. It was removed and every check above was run again.
+
+Not verified here: the manual browser pass and the live HTTP check (LIVE-1, a later step).
 
 ## Design-review carry-over
 From `.agents/tasks/reports/design-review.json` (3 MEDIUM, 4 LOW). Full text in design.md, "Responses to design review round 3".
