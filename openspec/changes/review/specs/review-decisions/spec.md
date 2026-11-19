@@ -54,7 +54,7 @@ The system SHALL accept the decisions approve, reject and reopen on a submitted 
 - **THEN** the response is 403 with code `WORKSPACE_READ_ONLY`
 
 ### Requirement: Reasons for reject and reopen
-The system SHALL require a reason of 1 to 1000 characters after trimming and sanitizing for reject and reopen. The reason SHALL be stored as a comment of kind `decision` on the report. Approve MAY carry a reason, stored the same way when given.
+The system SHALL require a reason of 1 to 1000 characters after trimming and sanitizing for reject and reopen. The reason SHALL be stored as a comment of kind `decision` on the report. Approve MAY carry a reason, stored the same way when given. An approve reason that is empty after sanitizing SHALL be ignored without an error, and one over 1000 characters SHALL be refused with a field error on `reason`.
 
 #### Scenario: Reject without a reason
 - **WHEN** a reviewer rejects with no reason or only spaces
@@ -64,6 +64,12 @@ The system SHALL require a reason of 1 to 1000 characters after trimming and san
 - **WHEN** a reviewer rejects with a reason
 - **THEN** the report is rejected and the reason appears in the report's comments with kind `decision`
 
+#### Scenario: Approve with only tags as a reason
+- **WHEN** a reviewer approves with the reason `<b></b>`
+- **THEN** the report is approved and no comment is stored
+#### Scenario: Approve with a long reason
+- **WHEN** a reviewer approves with a reason of 1001 characters
+- **THEN** the response is 400 with a field error on `reason`
 #### Scenario: Reopen without a reason
 - **WHEN** a reviewer reopens an approved report with no reason
 - **THEN** the response is 400 with a field error on `reason`

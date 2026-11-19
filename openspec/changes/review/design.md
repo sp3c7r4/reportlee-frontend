@@ -21,20 +21,23 @@ Repos and branches: backend `c:\Users\HP\Desktop\backecn-reportlee\reportlee-bac
 | D9 | New relation `admin` in `ReportAccess.relation`: an Admin who is not the author of a submitted report and is not its designated reviewer. It may read and decide, not mark seen, not start a thread. | An Admin browsing a headed Space must not start the author's lock (D4). |
 | D10 | `seen` is an explicit `POST /reports/:id/seen`, not a side effect of `GET`. The frontend calls it once per page open for a viewer who is neither author nor Staff and ignores 403 and 404. | GET stays safe. |
 | D11 | `markSeen(tx, report, now)` sets `firstSeenAt` only when null and `windowStartedAt` only when null, and inserts a `seen` event only when `windowStartedAt` changed. Edit already clears `windowStartedAt`. `editState` is unchanged. | C2. After an edit the next designated look starts a new window, the first seen time stays, so delete stays locked. |
-| D12 | A decision calls `markSeen` first, then applies itself. Reopen then clears `windowStartedAt`. | A reviewer who decides has seen it. |
-| D13 | Comments and reasons are plain text. Tags are stripped with `sanitize-html` (`allowedTags: []`, `allowedAttributes: {}`), then trimmed. The text is stored as the sanitizer returns it and React renders it as text. | No new dependency. Untrusted text rule. |
+| D12 | A decision or a comment by the designated reviewer (relation `reviewer`) calls `markSeen` first (sets `firstSeenAt` if null, starts the window if empty). A decision by a non-designated Admin (relation `admin`) calls `markSeen` with `startWindow: false`: it sets `firstSeenAt` if null so delete stays locked and never touches `windowStartedAt`. Reopen then clears `windowStartedAt`. | A reviewer who decides or comments has seen the report, so the author cannot delete it under live comments and tasks. A browsing or overriding Admin must not start the author lock (D9). |
+| D13 | Comments, reasons, task titles and completion notes are plain text. `plainText(input)` in `comment-sanitizer.ts`: (1) `sanitizeHtml(input, { allowedTags: [], allowedAttributes: {}, textFilter: (t) => t })` strips tags and drops script and style content; (2) decode the five entities the sanitizer emits (`&amp;`, `&lt;`, `&gt;`, `&quot;`, `&#39;`) back to `&`, `<`, `>`, `"`, `'` in one pass (no double decoding); (3) trim. The decoded text is stored and lengths are checked on the decoded text. React renders it as text and the email template escapes it once. | No new dependency. Untrusted text rule. `sanitize-html` returns escaped text (`Q&A` becomes `Q&amp;A`), which would display wrong and miscount length. |
 | D14 | Task creation is the optional `followUp` object on `POST /reports/:id/comments`. `tasks.comment_id` is the single link and `CommentDto.taskId` is joined in. | One transaction, one direction of FK. |
 | D15 | Assignee: active Staff or Head Membership of the Workspace, not the assigner. The frontend discussion screen offers the report's author (a Staff or Head); the server accepts any such member. | Admins author nothing. Recorded as a default, see Assumptions. |
 | D16 | Notification table is extended additively: nullable `workspace_id`, `membership_id`, `href`, and four enum values. `role` stays NOT NULL with the existing fallback. | Backward compatible. |
 | D17 | Notifications are written after the business transaction commits by `ReviewNotifier`, which maps recipient Membership to user. Failures are logged without personal data and never fail the request. | Matches the existing fire-and-forget `notify()` and `invitation.service.ts`. |
-| D18 | Email queued after commit with try/catch (pattern of `invitation.service.ts`). Recipient address read from the author's user row at send time. | V8, no address in logs. |
+| D18 | Email queued after commit with try/catch (pattern of `invitation.service.ts`). `DecisionEmail.queue` reads the author's address from the user row after commit and calls `EmailQueueService.add(EmailJobNames.DECISION, { message: { to, subject }, template: EmailTemplates.DECISION, locals, idempotencyKey: "decision:<eventId>" })`. The queue needs `message.to` at enqueue time, so the address is in the Redis job and nowhere else. Failure logging uses report id and job name only, and any error text goes through `redactEmails` from `@/helpers/log-redact.helper`. `EmailTemplates.DECISION` is added to the closed enum in `src/enums/mail/mail.enums.ts`. | V8, no address in logs. A stable key stops a retry from sending twice. |
 | D19 | C1 is fixed in the frontend by `reviewerLabel` in `src/lib/review.ts`. No API change. | `reviewersFor` lacks the Head-author case in a label. |
 | D20 | Audit rows in the same transaction: new `AuditAction` values `report.decided`, `report.reopened`, `task.created`, `task.moved`. Summary holds ids and keys only. | Brief: audit rows if trivial. |
 | D21 | Task status moves are allowed in a read-only Workspace. Creating a task and commenting are not. | The brief lists submit, review and comment as blocked. Moves are not listed. Flagged as a default. |
 | D22 | The bell polls `GET /notifications/unread-count` every 60 seconds and on window focus. | Smallest thing that works. The socket push exists server-side for later. |
 | D23 | `missing` list is built from the same query as the existing frontend `missingFor`: active, not Admin, no non-draft report in the period. | Mirrors the frontend rule. |
+| D24 | Notification text never carries the reason (privacy). An edit after a rejection notifies nobody. `src/lib/events.ts` is no longer used on the signed-in path (kept for the mock tests). The realtime `notification:new` payload gains `workspaceId` and `href`. | Differs from `events.ts` on purpose; recorded so nobody restores the reason text. |
+| D25 | `GET /tasks`, the review queue and the notifier exclude rows whose report has `deleted_at` set. | A deleted report must not leave visible tasks. |
+| D26 | The server accepts any real calendar date for `followUp.dueAt`, past dates included. The form still blocks past dates. | The server rule is only "real date"; the product rule stays in the form. |
 
-Note on D13: the stored body is exactly what `sanitize-html` returns with no tags allowed. The frontend renders it as text and never with `dangerouslySetInnerHTML`.
+Note on D13: stored text is the decoded plain text. `Q&A <3` is stored as `Q&A <3`. `<b></b>` becomes empty. `a &lt;script&gt; b` is stored as `a <script> b` and the frontend renders it as text, never with `dangerouslySetInnerHTML`. The same `plainText` runs on `reason`, `followUp.title` and `completionNote`.
 
 ## Backend
 
@@ -46,6 +49,8 @@ Order of middleware: `jwt.validateToken`, `requireCaller`, Zod (`ZodEngine.valid
 - Field: `{ "timestamp": "...", "status": 400, "success": false, "error": { "reason": "Write a reason." } }`. Nested keys use dots: `{ "followUp.dueAt": "Use the form YYYY-MM-DD." }`. Unknown key: `{ "<key>": "This field is not accepted." }`.
 - 404: `{ ..., "status": 404, "success": false, "error": { "message": "Not found." } }`.
 - 401 (suspended or bad token) and 500 (`"Something went wrong. Try again."`) as in the `reports` change. Unexpected errors are logged once with code and path, never with body text.
+
+Every new controller (report seen, decision, comments, review, task, and the extended notification controller) passes `{ log: false }` to `sendSuccessResponse` for E12 to E21, as `ReportController` does, so comment text, titles and reasons never reach stdout. A test captures logs (`tests/helpers/log-capture.ts`) and asserts a posted comment body is absent.
 
 All user-facing strings go in `report.message.ts`, `task.message.ts`, `review.message.ts` with no em dash.
 
@@ -93,13 +98,13 @@ Route order: in `report.routes.ts` the new `/:id/seen`, `/:id/decision`, `/:id/c
 
 Request: no body. Params `{ id }` through `reportIdParamSchema`. Service: transaction, `ReportAccess.assertSeen` (lock FOR UPDATE), `markSeen(tx, report, now)`.
 
-`assertSeen` order: load (missing, deleted, other Workspace, deactivated: 404; suspended: 401); draft: 404; relation `none`: 404; relation `author` or `admin`: 403 `NOT_REVIEWER`; relation `reviewer`: continue.
+`assertSeen` order: load (missing, deleted, other Workspace, deactivated: 404; suspended: 401); draft: 404; relation `none`: 404; relation `author` or `admin`: 403 `NOT_REVIEWER`; relation `reviewer`: continue (`markSeen` with `startWindow: true`).
 
 200: `{ "firstSeenAt": "2026-11-18T10:00:00.000Z", "windowStartedAt": "2026-11-18T10:00:00.000Z" }`. Calls after the first return the stored values. 403: `{ "message": "Only a reviewer of this report can mark it seen.", "code": "NOT_REVIEWER" }`. Logged: none for 4xx.
 
 ### E13 `POST /reports/:id/decision`
 
-Body schema (strict object): `decision` required, one of `approve`, `reject`, `reopen`; `reason` optional string, at most 4000 raw characters (the sanitized length is checked again in the service). Bad `decision`: 400 `{ "decision": "Choose approve, reject or reopen." }`. Raw too long: 400 `{ "reason": "Use 1000 characters or fewer." }`.
+Body schema (strict object): `decision` required, one of `approve`, `reject`, `reopen`; `reason` optional string, at most 4000 raw characters (the decoded length is checked again in the service). Bad `decision`: 400 `{ "decision": "Choose approve, reject or reopen." }`. Raw too long: 400 `{ "reason": "Use 1000 characters or fewer." }`.
 
 `assertDecide` order (binding, each adjacent pair has a test), on the row locked FOR UPDATE:
 
@@ -111,17 +116,17 @@ Body schema (strict object): `decision` required, one of `approve`, `reject`, `r
 6. Role `admin`: relation `reviewer` or `admin`.
 7. Workspace read-only: 403 `WORKSPACE_READ_ONLY`.
 8. State: `approved` accepts only `reopen`, else 409 `REPORT_APPROVED`. `reopen` on a non-approved report: 409 `NOT_APPROVED`.
-9. Reason (reject and reopen): sanitize, trim, 1 to 1000 characters, else 400 `{ "reason": "Write a reason of up to 1000 characters." }`.
+9. Reason: run `plainText`. Reject and reopen: 1 to 1000 characters, else 400 `{ "reason": "Write a reason of up to 1000 characters." }`. Approve: when `reason` is present and empty after `plainText`, no comment is stored and it is not an error; over 1000 characters is 400 on `reason`. The DB CHECK is a backstop only and is never the first line of defense.
 
-Then, in the same transaction: `markSeen`; update `review_status` (`approved`, `rejected` or `pending`) and, for reopen, `windowStartedAt = null`; insert the event (`approved`, `rejected`, `reopened`) with the actor; insert the `decision` comment when a reason exists; audit row. After commit: `ReviewNotifier.decision`, and for approve and reject `DecisionEmail.queue` when the switch is on.
+Then, in the same transaction: `markSeen` (`startWindow: true` for relation `reviewer`, `false` for relation `admin`, see D12); update `review_status` (`approved`, `rejected` or `pending`) and, for reopen, `windowStartedAt = null`; insert the event (`approved`, `rejected`, `reopened`) with the actor; insert the `decision` comment when a reason exists; audit row. After commit: `ReviewNotifier.decision`, and for approve and reject `DecisionEmail.queue` when the switch is on.
 
 200: the full `ReportDto` of the report, with `comments`. 409 bodies: `{ "message": "This report is approved. Reopen it first.", "code": "REPORT_APPROVED" }` and `{ "message": "Only an approved report can be reopened.", "code": "NOT_APPROVED" }`. A double decide by two reviewers is serialized by the row lock; the second sees the new state and gets 409.
 
 ### E14 `POST /reports/:id/comments`
 
-Body schema (strict): `body` required string, at most 6000 raw characters; `followUp` optional object `{ title: string 1..200, assigneeMembershipId: string of digits, dueAt: string, priority: low|medium|high|critical }`, all four required inside the object. `dueAt` must match `^\d{4}-\d{2}-\d{2}$` and be a real calendar date, checked in Zod with a refinement. Errors are field errors with dotted keys.
+Body schema (strict): `body` required string, at most 6000 raw characters; `followUp` optional object `{ title: string 1..200, assigneeMembershipId: string of digits, dueAt: string, priority: low|medium|high|critical }`, all four required inside the object. `dueAt` must match `^\d{4}-\d{2}-\d{2}$` and be a real calendar date, checked in Zod with a refinement. Past dates are accepted (D26). Errors are field errors with dotted keys.
 
-`assertComment` order: load (404 as above); draft: 404; relation `none`: 404; read-only Workspace: 403 `WORKSPACE_READ_ONLY`; relation `reviewer`: allowed; relation `author`: allowed only when the report already has a comment of kind `comment` by someone else, else 403 `REVIEWER_MUST_START`; relation `admin` (not designated): 403 `NOT_REVIEWER`. Then sanitize `body` (1..2000, else 400 `{ "body": "Write a comment of up to 2000 characters." }`). `followUp` with relation `author`: 403 `REVIEWER_MUST_START`. Assignee check: active Staff or Head Membership of the Workspace, not the caller, else 400 `{ "followUp.assigneeMembershipId": "Choose an active Staff member or Head of this Workspace." }`. The title is sanitized like a comment and must still be 1..200.
+`assertComment` order: load (404 as above); draft: 404; relation `none`: 404; read-only Workspace: 403 `WORKSPACE_READ_ONLY`; relation `reviewer`: allowed; relation `author`: allowed only when the report already has a comment of either kind (`comment` or `decision`) written by someone other than the author, else 403 `REVIEWER_MUST_START`, so the author can answer a rejection reason; relation `admin` (not designated): 403 `NOT_REVIEWER`. For relation `reviewer`, `markSeen` runs in the same transaction (D12). Then `plainText` on `body` (1..2000, else 400 `{ "body": "Write a comment of up to 2000 characters." }`). `followUp` with relation `author`: 403 `REVIEWER_MUST_START`. Assignee check: active Staff or Head Membership of the Workspace, not the caller, else 400 `{ "followUp.assigneeMembershipId": "Choose an active Staff member or Head of this Workspace." }`. The title is sanitized like a comment and must still be 1..200.
 
 Transaction: insert comment, insert task (when `followUp`), audit `task.created`. After commit: notifier (reviewer comment to author; author reply to the designated reviewers; task to assignee).
 
@@ -131,7 +136,7 @@ Transaction: insert comment, insert task (when `followUp`), audit `task.created`
 
 Query schema: `workspaceId` required digit string; `periodId` required digit string. Unknown keys refused. Service: `resolveOrNotFound(userId, workspaceId)`; role `staff`: 403 `{ "message": "Only Heads and Admins can review.", "code": "NOT_REVIEWER" }`; period not in the Workspace: 404.
 
-Reports: submission status not `draft`, in the period, author not the caller. Head: Space whose `head_membership_id` is the caller. Admin: whole Workspace. Ordered by `submitted_at` ascending, capped at 500. `ReportDto` for each, with revisions, events and comments loaded in batched queries, three queries in total, not per report (as `withHistory` does). Missing: active, non-Admin Memberships in scope (Head: own Space) without a non-draft report in the period, with `hasDraft`.
+Reports: submission status not `draft`, `deleted_at` null, in the period, author not the caller. Head: Space whose `head_membership_id` is the caller. Admin: whole Workspace. Ordered by `submitted_at` ascending, capped at 500. `ReportDto` for each, with revisions, events and comments loaded in batched queries, three queries in total, not per report (as `withHistory` does). Missing: active, non-Admin Memberships in scope (Head: own Space) without a non-draft report in the period, with `hasDraft`.
 
 200: `{ "reports": [ReportDto], "missing": [MissingRow] }`.
 
@@ -143,7 +148,7 @@ Body schema (strict): `workspaceId` digit string, `reportIds` array of 1 to 100 
 
 ### E17 `GET /tasks`
 
-Query: `workspaceId` required, `view` one of `mine`, `by`, `space`, `all`. Allowed views: staff `mine`; head `mine`, `by`, `space`; admin `by`, `all`. Other: 403 `{ "message": "You cannot use this view.", "code": "VIEW_NOT_ALLOWED" }`. `space` for a Head without a Space: empty list. Done tasks with `completed_at` older than 14 days are dropped. Ordered by `due_on`, `id`, capped at 500.
+Query: `workspaceId` required, `view` one of `mine`, `by`, `space`, `all`. Allowed views: staff `mine`; head `mine`, `by`, `space`; admin `by`, `all`. Other: 403 `{ "message": "You cannot use this view.", "code": "VIEW_NOT_ALLOWED" }`. `space` for a Head without a Space: empty list. Tasks whose report has `deleted_at` set are dropped (D25). Done tasks with `completed_at` older than 14 days are dropped. There is no way to ask for older ones. Ordered by `due_on`, `id`, capped at 500.
 
 200: `[TaskDto]`.
 
@@ -159,7 +164,7 @@ Order: load the task FOR UPDATE; missing: 404; `resolveOrNotFound(user, task.wor
 
 - `GET /notifications?workspaceId=&page=&limit=`: `workspaceId` optional digit string. When given, rows with that `workspace_id` only. When absent, all rows. Response items gain `workspaceId` and `href`. The existing `total` bug (counts fetched rows) is not touched.
 - `GET /notifications/unread-count?workspaceId=`: `{ "count": 3 }`, filtered the same way.
-- `POST /notifications/read-all`: optional JSON body `{ "workspaceId": "8" }`. Marks the caller's unread rows, in that Workspace when given. 200 `{ "message": "All notifications marked as read" }`.
+- `POST /notifications/read-all`: optional JSON body `{ "workspaceId": "8" }`. An empty body is allowed. A malformed JSON body is 400 `{ "body": "Send valid JSON or no body." }`. Unknown keys are refused. Marks the caller's unread rows, in that Workspace when given. 200 `{ "message": "All notifications marked as read" }`.
 - `PATCH /notifications/:id/read` unchanged: marks only the caller's row, `{ "updated": false }` for others.
 
 Notifications written before this change have `workspace_id` null and show without a filter only.
@@ -337,14 +342,14 @@ Backward compatibility: every change is additive. A backend running the new code
 
 ### API modules (all calls through `src/lib`, base URL from `NEXT_PUBLIC_API_URL` only, tokens in memory)
 
-New files, each following `reports-api.ts` (`apiCall`, `authed`, `UNREACHABLE`, `FieldErrors`): `review-api.ts` (`markSeen`, `decide`, `loadQueue`, `bulkApprove`), `discussion-api.ts` (`postComment`), `tasks-api.ts` (`listTasks`, `moveTask`), `notifications-api.ts` (`listNotifications`, `unreadCount`, `markRead`, `markAllRead`). Each returns `{ ok: true, data } | { ok: false, message, fields?, code? }`. `src/lib/report-errors.ts` gets the new codes mapped to sentences: `NOT_REVIEWER`, `NOT_AUTHOR_CANNOT_DECIDE`, `NOT_APPROVED`, `REVIEWER_MUST_START`, `NOT_ASSIGNEE`, `VIEW_NOT_ALLOWED`.
+New files, each following `reports-api.ts` (`apiCall`, `authed`, `UNREACHABLE`, `FieldErrors`): `review-api.ts` (`markSeen`, `decide`, `loadQueue`, `bulkApprove`), `discussion-api.ts` (`postComment`), `tasks-api.ts` (`listTasks`, `moveTask`), `notifications-api.ts` (`listNotifications`, `unreadCount`, `markRead`, `markAllRead`). Each returns the `Call<T>` shape of `src/lib/api.ts`: `{ ok: true, status, data } | { ok: false, status, message, fieldErrors?, code? }`. `src/lib/report-errors.ts` gets the new codes mapped to sentences: `NOT_REVIEWER`, `NOT_AUTHOR_CANNOT_DECIDE`, `NOT_APPROVED`, `REVIEWER_MUST_START`, `NOT_ASSIGNEE`, `VIEW_NOT_ALLOWED`, `NOT_FOUND`, `INTERNAL`, and sentences for the bulk skip codes `REPORT_APPROVED`, `NOT_SUBMITTED` and `WORKSPACE_READ_ONLY`.
 
 ### Mirrored types (files that change)
 
 - `src/lib/api-types.ts`: `ApiComment`, `ApiTask`, `ApiNotification`, `ApiQueue`, `ApiBulkResult`, `ApiSeen`; `ApiReport.comments` becomes `ApiComment[]`.
 - `src/data/reports.ts` `Comment`: no change. The mapper turns `taskId: null` into undefined.
 - `src/data/tasks.ts` `Task`: no change; `dueAt` is the `YYYY-MM-DD` string. `SAMPLE_TASKS` stays for the mock-only tests but no screen reads it.
-- `src/lib/notifications.ts` `Notification`: no change. The mapper sets `id` to `String(id)`, `kind` from `type` (`decision`, `comment`, `task`; `submission` shows as kind `comment` with its own title; `system` and `account` show as `security`), `body` from `message`, `at` from `createdAt`, `read`, `href` (null becomes `/dashboard`).
+- `src/lib/notifications.ts` `Notification`: no change. The mapper sets `id` to `String(id)`, `kind` from `type` (`decision`, `comment`, `task`; `submission` shows as kind `comment` with its own title; `system` and `account` show as `security`), `body` from `message`, `at` from `createdAt`, `read`, `href` (accepted only when it starts with `/dashboard/`; null or anything else becomes `/dashboard`).
 - `src/lib/review.ts`: add `reviewerLabel`.
 
 ### Screens and states
@@ -355,8 +360,8 @@ New files, each following `reports-api.ts` (`apiCall`, `authed`, `UNREACHABLE`, 
 | Report page `report-view.tsx` | existing `getReport`, `markSeen` | Calls `markSeen` once per open when the viewer is not the author and the role is Head or Admin, ignores 403 and 404. Label from `reviewerLabel` using the roster already loaded for the page, or `listMembers` when absent. The localStorage task read is removed. |
 | Discussion `report-discussion.tsx` | `postComment` | Posting, field errors on body and follow-up, the reviewer-must-start message for the author, read-only message. |
 | Timeline `report-timeline.tsx` | none | Shows `seen`, `approved`, `rejected`, `reopened` events from the server. |
-| Tasks `task-board.tsx` | `listTasks`, `moveTask` | Loading, error with retry, honest empty state per view, 403 on a view hides it. Move errors revert the card and show the sentence. No `SAMPLE_TASKS`, no localStorage. |
-| Home `home-screen.tsx` | `listTasks` | Replaces `SAMPLE_TASKS` (lines 56 and 88 to 90). Empty state when none. |
+| Tasks `task-board.tsx` | `listTasks`, `moveTask` | Loading, error with retry, honest empty state per view, 403 on a view hides it. Move errors revert the card and show the sentence. The "Show older" control is removed because the 14-day rule is server side. The due date form still blocks past dates. No `SAMPLE_TASKS`, no localStorage. |
+| Home `home-screen.tsx` | `listTasks` | Replaces `SAMPLE_TASKS` (lines 56 and 88 to 90). Requests `viewsFor(viewer)[0]`: Staff and Head `mine`, Admin `by`. Empty state when none. A failure shows a one-line inline error with a retry button and does not block the rest of Home. |
 | Notifications `notifications-screen.tsx` | `listNotifications`, `markRead`, `markAllRead` | Loading, error, empty ("No notifications yet"), list. Scoped by `workspace.id`. |
 | Bell `notification-bell.tsx` | `unreadCount` | Badge from the server count, poll every 60 seconds and on focus. A failed poll keeps the last count. |
 
@@ -384,8 +389,8 @@ Not unit-testable: real email delivery, the 60 second poll, realtime push.
 4. `notify()` falls back to role `"member"`. Verify the value exists in the `user_role` enum, and what role the dev fixtures have, so the NOT NULL column cannot fail an insert.
 5. `FRONTEND_URL` is a usable base for the report link in the email, and the frontend report route is `/dashboard/reports/<id>`.
 6. The `ADD VALUE` statements work inside the runner's per-file transaction on the `app-db` image version (Postgres 12 or later).
-7. `sendSuccessResponse` still has a `console.log("Response: ", data)` (gate0 section 9). If it does, comment text reaches stdout. Kept out of scope, added to the Backlog.
-8. A reason on approve is optional and stored when given.
+7. Existing report controllers pass `{ log: false }` on responses. New controllers must too (conventions). Verified by a log-capture test.
+8. A reason on approve is optional and stored when given and non-empty after `plainText`.
 9. The queue is capped at 500 reports and tasks at 500 rows. No pagination in this slice.
 
 ## Rejected alternatives
@@ -421,6 +426,11 @@ The backend deploys first. Everything is additive.
 - AC6: Bulk approve of a mixed batch approves what it may, lists each skipped id with its code, and never aborts. Head gets 403. 101 ids give 400.
 - AC7: Seen by the designated reviewer sets both times and one event. A second call changes nothing. The author, Staff and a non-designated Admin cannot start the window.
 - AC8 (C2): edit inside the window works and clears the window. The next designated look starts a new window and keeps `firstSeenAt`. An edit after that window gives 403 `EDIT_WINDOW_CLOSED`. A rejected report stays editable. Delete gives `REPORT_SEEN` after seen.
+- AC21: `plainText` stores `Q&A <3` as `Q&A <3` and `a &lt;script&gt; b` as `a <script> b`, with length counted on decoded text; the same holds for reason, title and note.
+- AC22: A reviewer comment or task sets `firstSeenAt`, so the author gets 403 `REPORT_SEEN` on delete. A decision by a non-designated Admin sets `firstSeenAt` and leaves `windowStartedAt` unchanged. Tasks of a deleted report are not listed.
+- AC23: The author can reply after a reviewer rejected with a reason.
+- AC24: Approve with a reason that is empty after sanitizing stores no comment and returns 200. A reason over 1000 characters gives 400 on `reason`.
+- AC25: A posted comment body is absent from captured stdout.
 - AC9: Reviewer starts, author replies, author cannot start, a colleague gets 404, other Workspace 404. `<script>` and tags are stripped, tag-only text gives 400, 2001 characters give 400.
 - AC10: A follow-up creates the task in the same transaction. A bad assignee or date gives 400 and no comment is saved. Only a reviewer can attach it.
 - AC11: Only the assignee moves a task (`NOT_ASSIGNEE` for assigner, other Head, Admin). `completedAt` is set on done and cleared on leaving done. A 15 day old done task is not listed.
@@ -439,7 +449,27 @@ The backend deploys first. Everything is additive.
 - Emails for comments, tasks and submissions.
 - Websocket client for notifications.
 - Pagination for the queue, tasks and the notification `total` (counts fetched rows today).
-- `console.log("Response: ", data)` in `sendSuccessResponse` if still present.
 - Comment edit and delete.
 - Real file upload for task completion files.
 - Audit log screen.
+
+## Responses to design review round 1
+
+All 14 findings are addressed. None is backlogged or ignored.
+
+| # | Finding | Response |
+|---|---|---|
+| 1 | Escaped text stored | Fixed. D13 `plainText` strips tags, decodes entities, trims; lengths on decoded text; AC21; comments spec scenario. |
+| 2 | Email address at enqueue | Fixed. D18 rewritten: address read after commit, `idempotencyKey`, `EmailTemplates.DECISION`, `redactEmails`. BE-6 updated. |
+| 3 | Comment or task not a look; orphan tasks | Fixed. D12 makes a designated reviewer's comment call `markSeen`; D25 hides tasks and queue rows of deleted reports; AC22; specs. |
+| 4 | Stale assumption 7, `log: false` | Fixed. Conventions require `{ log: false }` on every new controller; assumption 7 replaced; Backlog line removed; AC25. |
+| 5 | Decision starts window for Admin | Fixed. D12: `startWindow: false` for relation `admin`; seen-window spec scenario; AC22. |
+| 6 | Author cannot answer a decision reason | Fixed. E14 rule uses either comment kind; spec scenario; AC23. |
+| 7 | Approve reason has no rule | Fixed. E13 step 9; decisions spec scenarios; AC24. |
+| 8 | Home view undefined | Fixed. Home requests `viewsFor(viewer)[0]` with inline error and retry. |
+| 9 | Result shape differs from `api.ts` | Fixed. Frontend section uses `Call<T>` with `status` and `fieldErrors`. |
+| 10 | Dead "Show older" control | Fixed. Control removed; 14-day rule is server side. |
+| 11 | Past due dates | Fixed. D26: server accepts any real date; the form blocks past dates. |
+| 12 | Notification content vs `events.ts` | Fixed. D24 records no reason in notifications, no notification on edit after reject, socket payload gains `workspaceId` and `href`. |
+| 13 | Small gaps | Fixed. Admin comment scenario, `NOT_FOUND` and `INTERNAL` sentences, bulk skip sentences, read-all body rule. |
+| 14 | `href` check | Fixed. Mapper accepts only `/dashboard/` prefixes; spec scenario. |

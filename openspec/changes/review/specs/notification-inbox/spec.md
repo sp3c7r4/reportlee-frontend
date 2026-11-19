@@ -4,7 +4,7 @@ Defines which in-app notifications review activity creates, how they are scoped 
 ## ADDED Requirements
 
 ### Requirement: Notifications for review activity
-The system SHALL create an in-app notification, after the change is saved, for each of these. A decision goes to the report's author. A reviewer's comment goes to the author. The author's reply goes to the report's designated reviewers. A submission goes to the report's designated reviewers. A task goes to its assignee. A tag notifies nobody. A notification SHALL carry the Workspace id and a link to the report or the tasks page. A failure to write a notification SHALL NOT fail the request that caused it.
+The system SHALL create an in-app notification, after the change is saved, for each of these. A decision goes to the report's author. A reviewer's comment goes to the author. The author's reply goes to the report's designated reviewers. A submission goes to the report's designated reviewers. A task goes to its assignee. A tag notifies nobody. An edit after a rejection notifies nobody. A notification SHALL NOT contain the decision reason. A notification SHALL carry the Workspace id and a link to the report or the tasks page. A failure to write a notification SHALL NOT fail the request that caused it.
 
 #### Scenario: Decision
 - **WHEN** a reviewer rejects a report
@@ -41,12 +41,18 @@ The system SHALL list, count and mark read only the caller's own notifications, 
 - **WHEN** a user marks another user's notification as read
 - **THEN** the other user's notification stays unread
 
+#### Scenario: Malformed read-all body
+- **WHEN** mark all read is called with a malformed JSON body
+- **THEN** the response is 400 and nothing is marked
+#### Scenario: Unsafe link
+- **WHEN** a stored link does not start with `/dashboard/`
+- **THEN** the screen links to `/dashboard`
 #### Scenario: Empty inbox
 - **WHEN** a user has no notifications
 - **THEN** the screen shows an empty state and no sample items
 
 ### Requirement: Decision email
-The system SHALL queue one email to the author for an approve or reject decision, after the decision is saved, when `DECISION_EMAILS_ENABLED` is true (default true). It SHALL NOT email for reopen, comments, tasks or submissions. The email SHALL escape the reason. A failure to queue SHALL NOT fail the decision. The system SHALL NOT write the address to any log.
+The system SHALL queue one email to the author for an approve or reject decision, after the decision is saved, when `DECISION_EMAILS_ENABLED` is true (default true). It SHALL NOT email for reopen, comments, tasks or submissions. The email SHALL escape the reason and SHALL use a stable key per decision so a retry sends once. A failure to queue SHALL NOT fail the decision. The system SHALL NOT write the address to any log.
 
 #### Scenario: Approve
 - **WHEN** a reviewer approves a report

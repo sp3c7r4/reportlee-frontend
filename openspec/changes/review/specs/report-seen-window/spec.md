@@ -34,7 +34,7 @@ The system SHALL refuse deleting a report once its first seen time is set, and S
 - **THEN** the response is 403 with code `REPORT_SEEN`
 
 ### Requirement: Edit window and edits after a look
-The system SHALL allow the author to edit a seen, pending report for the Workspace's edit window (30 minutes by default) from the window start. An edit SHALL clear the window start. The next look by a designated reviewer SHALL start a new window and leave the first seen time unchanged. After that window closes, an edit SHALL be refused with code `EDIT_WINDOW_CLOSED`. A decision by a reviewer SHALL also count as a look. A rejected report SHALL stay editable after the window.
+The system SHALL allow the author to edit a seen, pending report for the Workspace's edit window (30 minutes by default) from the window start. An edit SHALL clear the window start. The next look by a designated reviewer SHALL start a new window and leave the first seen time unchanged. After that window closes, an edit SHALL be refused with code `EDIT_WINDOW_CLOSED`. A decision or a comment by a designated reviewer SHALL also count as a look. A decision by an Admin who is not a designated reviewer SHALL set the first seen time when empty and SHALL NOT start or change the window. A rejected report SHALL stay editable after the window.
 
 #### Scenario: Edit inside the window
 - **WHEN** the author edits 10 minutes after the first look
@@ -48,6 +48,9 @@ The system SHALL allow the author to edit a seen, pending report for the Workspa
 - **WHEN** a reviewer looks again after the author edited
 - **THEN** the window start is new and the first seen time is the original
 
+#### Scenario: Overriding Admin decides
+- **WHEN** an Admin who is not a designated reviewer decides a report that was never seen
+- **THEN** the first seen time is set and the window start stays empty
 #### Scenario: Rejected stays editable
 - **WHEN** the author edits a rejected report after the window
 - **THEN** the edit is saved

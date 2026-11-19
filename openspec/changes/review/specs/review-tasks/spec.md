@@ -4,7 +4,7 @@ Defines follow-up tasks that a reviewer assigns from a comment, how the assignee
 ## ADDED Requirements
 
 ### Requirement: Create a task from a comment
-The system SHALL let a designated reviewer attach a follow-up task to a comment they post. The task SHALL have a title of 1 to 200 characters, an assignee, a due date in the form YYYY-MM-DD and a priority of low, medium, high or critical. The assignee SHALL be an active Staff or Head Membership of the report's Workspace and SHALL NOT be the assigner. The comment and the task SHALL be saved together or not at all. A read-only Workspace SHALL refuse task creation. Only reviewers SHALL attach tasks.
+The system SHALL let a designated reviewer attach a follow-up task to a comment they post. The task SHALL have a title of 1 to 200 characters, an assignee, a due date in the form YYYY-MM-DD (any real date, past dates included, the form still blocks them) and a priority of low, medium, high or critical. The assignee SHALL be an active Staff or Head Membership of the report's Workspace and SHALL NOT be the assigner. The comment and the task SHALL be saved together or not at all. A read-only Workspace SHALL refuse task creation. Only reviewers SHALL attach tasks.
 
 #### Scenario: Reviewer assigns
 - **WHEN** a reviewer posts a comment with a valid follow-up
@@ -48,6 +48,9 @@ The system SHALL offer the views `mine` and `by` and `space` and `all` by role. 
 - **WHEN** a task was completed 15 days ago
 - **THEN** it is not in any list
 
+#### Scenario: Task of a deleted report
+- **WHEN** the author deleted the report a task hangs off
+- **THEN** the task is not in any list
 #### Scenario: Empty board
 - **WHEN** a user has no tasks
 - **THEN** the board shows an empty state and no sample tasks

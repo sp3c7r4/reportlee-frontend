@@ -4,7 +4,7 @@ Defines the discussion on a report: who may post, what is stored, and how the te
 ## ADDED Requirements
 
 ### Requirement: Thread rules
-The system SHALL let a designated reviewer start a thread on a submitted report and the report's author reply to it. Nobody else SHALL post. The author SHALL NOT start a thread. Comments SHALL NOT be edited or deleted in this version. A read-only Workspace SHALL refuse comments.
+The system SHALL let a designated reviewer start a thread on a submitted report and the report's author reply to it. The author MAY reply once any comment of either kind (a comment or a decision reason) by someone else exists. Nobody else SHALL post, and that includes an Admin who is not a designated reviewer. The author SHALL NOT start a thread. A reviewer's comment SHALL count as a look at the report. Comments SHALL NOT be edited or deleted in this version. A read-only Workspace SHALL refuse comments.
 
 #### Scenario: Reviewer starts
 - **WHEN** a designated reviewer posts the first comment on a report
@@ -14,6 +14,15 @@ The system SHALL let a designated reviewer start a thread on a submitted report 
 - **WHEN** the author posts after a reviewer comment
 - **THEN** the response is 201
 
+#### Scenario: Author replies to a rejection reason
+- **WHEN** a reviewer rejected the report with a reason and the author posts a reply
+- **THEN** the response is 201
+#### Scenario: Admin who is not a designated reviewer
+- **WHEN** an Admin posts on a report whose Space has a Head
+- **THEN** the response is 403 with code `NOT_REVIEWER`
+#### Scenario: Comment counts as a look
+- **WHEN** a reviewer comments on a report that was never marked seen and the author then deletes it
+- **THEN** the delete is refused with code `REPORT_SEEN`
 #### Scenario: Author starts
 - **WHEN** the author posts on a report that has no reviewer comment
 - **THEN** the response is 403 with code `REVIEWER_MUST_START`
@@ -33,6 +42,9 @@ The system SHALL treat comment and reason text as untrusted. It SHALL strip ever
 - **WHEN** a reviewer posts `<script>alert(1)</script>Please add figures`
 - **THEN** the stored body contains no tag and no script element
 
+#### Scenario: Ampersand and angle bracket
+- **WHEN** a reviewer posts `Q&A <3`
+- **THEN** the stored body is `Q&A <3`
 #### Scenario: Only tags
 - **WHEN** a reviewer posts `<b></b>`
 - **THEN** the response is 400 with a field error on `body`
