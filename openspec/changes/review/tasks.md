@@ -1,6 +1,7 @@
 ## 1. Spec and approval
 - [x] 1.1 (FE repo, docs) Author the OpenSpec change `review`, run `openspec validate review --strict`, paste the result under Validation. Test: validate exits 0.
-- [ ] 1.2 Design review, then the approval line appended here (done by the orchestrator, not this ticket).
+- [x] 1.2 Design review, then the approval line appended here (done by the orchestrator, not this ticket).
+- Approved 2026-11-18 by owner (pre-approved via orchestrator): V1 to V8, C1 to C4 and the scope in the brief. No new owner-level product decision found in design.md. Defaults taken from Assumptions 2 (D15 assignee rule, D21 task moves allowed in a read-only Workspace) and listed for the final report. Record: `.agents/tasks/review/approval.json`.
 
 ## 2. Backend (repo `reportlee-backend`, branch `feat/review`). Order matters. Each ticket: tests red first, then green. Run only the touched suites. `npx tsc --noEmit` stays green after each ticket. Commit per ticket, no push.
 - [ ] BE-1 Migration `src/db/migrations/0003_review.sql` (LF, idempotent, as in design.md), models (`report-comment.model.ts`, `task.model.ts`, `notification.model.ts` columns), `NotificationType`, `TableNames`, `postgres.schema.ts`, `tests/helpers/db.ts`, `factories.ts`. Test `tests/migration-0003.test.ts` (copy of `migration-0002.test.ts`): objects exist, applied twice with the no-catch helper, CRLF case, CHECKs refuse bad rows, unique comment link, notification columns and four enum values. Print `NODE_ENV`, confirm `app-db` on 5434, `npm run migrate` twice (second says already recorded). Never `migrate:rebuild`. Verify: `npx vitest run tests/migration-0003.test.ts tests/migration-0002.test.ts`, `npx tsc --noEmit`.
