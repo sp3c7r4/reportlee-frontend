@@ -3,7 +3,7 @@
 import { CheckmarkCircle02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DataPage } from "@/components/dashboard/page-wrappers";
 import { useShell } from "@/components/dashboard/shell-context";
 import { Button } from "@/components/ui/button";
@@ -15,33 +15,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CO_LEAGUE_ROSTER } from "@/data/members";
-import { SAMPLE_NOW } from "@/data/reports";
-import {
-  type Priority,
-  SAMPLE_TASKS,
-  type Task,
-  type TaskStatus,
-} from "@/data/tasks";
-import { recordAudit } from "@/lib/audit";
+import type { Priority, Task, TaskStatus } from "@/data/tasks";
+import type { ApiMember } from "@/lib/api-types";
 import { gsap, MOTION_OK, useGSAP } from "@/lib/gsap";
+import { listMembers } from "@/lib/members";
+import { reportErrorMessage } from "@/lib/report-errors";
 import {
   assigneeProblem,
-  DONE_DAYS,
   effectiveView,
-  inDoneWindow,
   moveTask,
   overdue,
-  type TaskViewer,
   PRIORITY_LABEL,
   PRIORITY_TONE,
   priorityOf,
   sortByPriority,
-  type View,
+  type TaskViewer,
   VIEW_LABEL,
+  type View,
   viewsFor,
-  visibleTasks,
 } from "@/lib/tasks";
+import { listTasks, updateTaskStatus } from "@/lib/tasks-api";
 import { cn } from "@/lib/utils";
 
 /* @info - One move function serves the menu and the completion dialog, so a card
@@ -53,16 +46,12 @@ const COLUMNS: Array<[TaskStatus, string]> = [
   ["done", "Done"],
 ];
 
-const TASKS_KEY = "reportlee.tasks";
-
-function loadTasks(): Task[] {
-  try {
-    const raw = window.localStorage.getItem(TASKS_KEY);
-    return raw ? (JSON.parse(raw) as Task[]) : SAMPLE_TASKS;
-  } catch {
-    return SAMPLE_TASKS;
-  }
-}
+const VIEW_EMPTY: Record<View, string> = {
+  mine: "Nothing is assigned to you.",
+  by: "You have not assigned any tasks.",
+  space: "Nobody in your Space has a task.",
+  all: "There are no tasks in this Workspace.",
+};
 
 export function TaskBoard() {
   const { membership, workspace } = useShell();
@@ -77,9 +66,12 @@ export function TaskBoard() {
   );
 
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [roster, setRoster] = useState<ApiMember[] | null>(null);
   const [view, setView] = useState<View>(() => viewsFor(viewer)[0] ?? "mine");
   const [overdueOnly, setOverdueOnly] = useState(false);
-  const [showOlder, setShowOlder] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+  const [moveBusy, setMoveBusy] = useState(false);
   const [moving, setMoving] = useState<{
     task: Task;
     status: TaskStatus;
@@ -114,10 +106,34 @@ export function TaskBoard() {
   );
 
   useEffect(() => {
-    setTasks(loadTasks());
     setView((current) => effectiveView(viewer, current));
-    setLoaded(true);
   }, [viewer]);
+
+  /* @info - The server filters by view and keeps Done to 14 days, so the board only
+     asks again when the view, the Workspace or the retry counter changes. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: version is the retry trigger
+  useEffect(() => {
+    let cancelled = false;
+    setLoaded(false);
+    setFailure(null);
+    void Promise.all([
+      listTasks(workspace.id, effectiveView(viewer, view)),
+      listMembers(workspace.id),
+    ]).then(([result, people]) => {
+      if (cancelled) return;
+      setRoster(people.ok ? people.data : null);
+      if (!result.ok) {
+        setFailure(reportErrorMessage(result));
+        setTasks([]);
+      } else {
+        setTasks(result.data);
+      }
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [view, viewer, version, workspace.id]);
 
   /**
    * Pointer drag, not native HTML5 drag: the native path silently refuses in some
@@ -200,8 +216,9 @@ export function TaskBoard() {
         setMoving({ task, status: landed });
         return;
       }
-      apply(task, landed);
-      setSettling(task.id);
+      void apply(task, landed).then((moved) => {
+        if (moved) setSettling(task.id);
+      });
       void next;
     };
 
@@ -210,26 +227,11 @@ export function TaskBoard() {
     window.addEventListener("pointercancel", end);
   };
 
-  const persist = (next: Task[]) => {
-    setTasks(next);
-    try {
-      window.localStorage.setItem(TASKS_KEY, JSON.stringify(next));
-    } catch {
-      setNotice("That move could not be saved on this device.");
-    }
-  };
+  const today = useMemo(() => new Date().toISOString(), []);
 
   const rows = useMemo(
-    () =>
-      visibleTasks({
-        tasks,
-        roster: CO_LEAGUE_ROSTER,
-        viewer,
-        view,
-        filter: { overdue: overdueOnly },
-        now: SAMPLE_NOW,
-      }),
-    [tasks, view, viewer, overdueOnly],
+    () => (overdueOnly ? tasks.filter((task) => overdue(task, today)) : tasks),
+    [tasks, overdueOnly, today],
   );
 
   /* @info - A drag that ends anywhere, including outside the board, must put the card
@@ -242,59 +244,54 @@ export function TaskBoard() {
     gsap.to(lifted, { scale: 1, rotate: 0, duration: 0.2, ease: "power2.out" });
   }, [dragging]);
 
-  const apply = (task: Task, status: TaskStatus, note?: string) => {
-    const result = moveTask({
-      task,
-      status,
-      viewer,
-      view,
-      now: new Date().toISOString(),
-      note,
-      readOnly: workspace.readOnly,
-    });
-    if (!result.ok) {
-      setNotice(result.reason);
-      return;
-    }
-    persist(tasks.map((row) => (row.id === task.id ? result.task : row)));
-    recordAudit(window.localStorage, membership.id, {
-      at: SAMPLE_NOW,
-      actorMembershipId: membership.id,
-      action: "task.moved",
-      target: task.id,
-      summary: `${COLUMNS.find(([key]) => key === status)?.[1] ?? status}`,
-    });
-    setNotice(
-      `Moved to ${COLUMNS.find(([key]) => key === status)?.[1] ?? status}.`,
-    );
-  };
+  /* @info - The local guard answers first, so a move the server would refuse never
+     leaves the page. The server answer replaces the card; a refusal leaves it where
+     it was and says why. Moves are allowed in a read-only Workspace (design D21). */
+  const apply = useCallback(
+    async (task: Task, status: TaskStatus, note?: string): Promise<boolean> => {
+      if (moveBusy) return false;
+      const local = moveTask({
+        task,
+        status,
+        viewer,
+        view,
+        now: new Date().toISOString(),
+        note,
+      });
+      if (!local.ok) {
+        setNotice(local.reason);
+        return false;
+      }
+      setMoveBusy(true);
+      const result = await updateTaskStatus(task.id, { status, note });
+      setMoveBusy(false);
+      if (!result.ok) {
+        setNotice(reportErrorMessage(result));
+        return false;
+      }
+      setTasks((current) =>
+        current.map((row) => (row.id === task.id ? result.data : row)),
+      );
+      setNotice(
+        `Moved to ${COLUMNS.find(([key]) => key === status)?.[1] ?? status}.`,
+      );
+      return true;
+    },
+    [moveBusy, view, viewer],
+  );
 
   const nameOf = (membershipId: string) =>
-    CO_LEAGUE_ROSTER.find((member) => member.membershipId === membershipId)
-      ?.name ?? "Former member";
+    roster?.find((member) => member.membershipId === membershipId)?.name ??
+    "Former member";
 
   const canMove = (task: Task) =>
     effectiveView(viewer, view) === "mine" &&
-    task.assigneeMembershipId === viewer.membershipId &&
-    !workspace.readOnly;
+    task.assigneeMembershipId === viewer.membershipId;
 
   const columns = COLUMNS.map(([status, label]) => ({
     status,
     label,
-    cards: sortByPriority(
-      rows.filter(
-        (task) =>
-          task.status === status && inDoneWindow(task, SAMPLE_NOW, showOlder),
-      ),
-    ),
-    hidden:
-      status === "done"
-        ? rows.filter(
-            (task) =>
-              task.status === "done" &&
-              !inDoneWindow(task, SAMPLE_NOW, showOlder),
-          ).length
-        : 0,
+    cards: sortByPriority(rows.filter((task) => task.status === status)),
   }));
 
   return (
@@ -353,7 +350,29 @@ export function TaskBoard() {
         <div className="mt-4 h-24 animate-pulse rounded-lg bg-surface-muted" />
       ) : null}
 
-      {loaded ? (
+      {loaded && failure ? (
+        <div
+          role="alert"
+          className="mt-4 rounded-lg border border-hairline p-4"
+        >
+          <p className="text-[13.5px] text-ink">{failure}</p>
+          <Button
+            variant="outline"
+            onClick={() => setVersion((current) => current + 1)}
+            className="mt-2 min-h-11 rounded-md px-3 text-[13px] sm:min-h-9"
+          >
+            Retry
+          </Button>
+        </div>
+      ) : null}
+
+      {loaded && !failure && rows.length === 0 ? (
+        <p className="mt-4 rounded-lg border border-hairline border-dashed px-4 py-8 text-center text-[13px] text-ink/60">
+          {overdueOnly ? "Nothing is overdue." : VIEW_EMPTY[view]}
+        </p>
+      ) : null}
+
+      {loaded && !failure && rows.length > 0 ? (
         <div ref={board} className="mt-4 grid gap-3 lg:grid-cols-3">
           {columns.map((column) => (
             <section
@@ -371,9 +390,9 @@ export function TaskBoard() {
                   className={cn(
                     "rounded-md px-2 py-1 font-semibold text-[11.5px]",
                     column.status === "todo" && "bg-ink text-surface",
-                    column.status === "doing" && "bg-sun text-ink dark:text-white",
-                    column.status === "done" &&
-                      "bg-success text-surface",
+                    column.status === "doing" &&
+                      "bg-sun text-ink dark:text-white",
+                    column.status === "done" && "bg-success text-surface",
                   )}
                 >
                   {column.label}
@@ -385,7 +404,7 @@ export function TaskBoard() {
 
               <div className="flex flex-col gap-2 p-2">
                 {column.cards.map((task) => {
-                  const problem = assigneeProblem(task, CO_LEAGUE_ROSTER);
+                  const problem = roster ? assigneeProblem(task, roster) : null;
                   return (
                     <article
                       key={task.id}
@@ -410,7 +429,7 @@ export function TaskBoard() {
                         <span className="tabular-nums">
                           due {shortDate(task.dueAt)}
                         </span>
-                        {overdue(task, SAMPLE_NOW) ? (
+                        {overdue(task, today) ? (
                           <>
                             <span className="text-ink/25"> · </span>
                             <span className="font-medium text-destructive">
@@ -444,7 +463,7 @@ export function TaskBoard() {
                           onMove={(status) =>
                             status === "done"
                               ? setMoving({ task, status })
-                              : apply(task, status)
+                              : void apply(task, status)
                           }
                         />
                       </div>
@@ -456,16 +475,6 @@ export function TaskBoard() {
                   <p className="grid min-h-[132px] place-items-center rounded-lg border border-hairline border-dashed px-2 text-center text-[12px] text-ink/45">
                     Nothing here.
                   </p>
-                ) : null}
-
-                {column.hidden > 0 ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowOlder(true)}
-                    className="min-h-11 rounded-md text-[12px] text-ink/60 underline"
-                  >
-                    Show {column.hidden} older (Done keeps {DONE_DAYS} days)
-                  </button>
                 ) : null}
               </div>
             </section>
@@ -487,7 +496,7 @@ export function TaskBoard() {
           </DialogHeader>
           <CompletionForm
             onConfirm={(note) => {
-              if (moving) apply(moving.task, moving.status, note);
+              if (moving) void apply(moving.task, moving.status, note);
               setMoving(null);
             }}
           />

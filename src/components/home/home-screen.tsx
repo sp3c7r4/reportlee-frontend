@@ -21,11 +21,13 @@ import {
   SAMPLE_PERIOD,
   SAMPLE_REPORTS,
 } from "@/data/reports";
-import { SAMPLE_TASKS, type Task } from "@/data/tasks";
+import type { Task } from "@/data/tasks";
 import { type HomeViewer, homeFor } from "@/lib/home";
 import { reportErrorMessage } from "@/lib/report-errors";
 import { savedReports } from "@/lib/reports";
 import { loadOwnReports, type OwnReports } from "@/lib/reports-api";
+import { viewsFor } from "@/lib/tasks";
+import { listTasks } from "@/lib/tasks-api";
 import { cn } from "@/lib/utils";
 
 /**
@@ -53,7 +55,9 @@ export function HomeScreen() {
   );
 
   const [reports, setReports] = useState<Report[] | null>(null);
-  const [tasks, setTasks] = useState<Task[]>(SAMPLE_TASKS);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasksFailure, setTasksFailure] = useState<string | null>(null);
+  const [tasksVersion, setTasksVersion] = useState(0);
   const [mine, setMine] = useState<(OwnReports & { now: string }) | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
@@ -83,13 +87,30 @@ export function HomeScreen() {
   useEffect(() => {
     const saved = savedReports(window.localStorage, membership.id);
     setReports(SAMPLE_REPORTS.map((report) => saved[report.id] ?? report));
-    try {
-      const raw = window.localStorage.getItem("reportlee.tasks");
-      setTasks(raw ? (JSON.parse(raw) as Task[]) : SAMPLE_TASKS);
-    } catch {
-      setTasks(SAMPLE_TASKS);
-    }
   }, [membership.id]);
+
+  /* @info - Tasks come from the server in the viewer's first allowed view: Staff and
+     Heads see what is assigned to them, Admins what they assigned. A failure shows one
+     inline line and never blocks the rest of Home. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tasksVersion is the retry trigger
+  useEffect(() => {
+    let cancelled = false;
+    setTasksFailure(null);
+    void listTasks(workspace.id, viewsFor(viewer)[0] ?? "mine").then(
+      (result) => {
+        if (cancelled) return;
+        if (result.ok) {
+          setTasks(result.data);
+        } else {
+          setTasks([]);
+          setTasksFailure(reportErrorMessage(result));
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [viewer, tasksVersion, workspace.id]);
 
   const home = useMemo(
     () =>
@@ -131,6 +152,22 @@ export function HomeScreen() {
         <p className="mt-3 rounded-md border border-hairline bg-surface-muted px-3 py-2 text-[12.5px] text-ink">
           This Workspace is read-only. You can read everything and change
           nothing.
+        </p>
+      ) : null}
+
+      {tasksFailure ? (
+        <p
+          role="alert"
+          className="mt-3 flex flex-wrap items-center gap-2 text-[12.5px] text-ink/70"
+        >
+          {tasksFailure}
+          <button
+            type="button"
+            onClick={() => setTasksVersion((current) => current + 1)}
+            className="min-h-11 text-ink underline sm:min-h-8"
+          >
+            Retry
+          </button>
         </p>
       ) : null}
 
