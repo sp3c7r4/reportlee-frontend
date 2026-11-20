@@ -4,7 +4,7 @@ Defines the discussion on a report: who may post, what is stored, and how the te
 ## ADDED Requirements
 
 ### Requirement: Thread rules
-The system SHALL let a designated reviewer start a thread on a submitted report and the report's author reply to it. The author MAY reply once any comment of either kind (a comment or a decision reason) by someone else exists. Nobody else SHALL post, and that includes an Admin who is not a designated reviewer. The author SHALL NOT start a thread. A reviewer's comment SHALL count as a look at the report. Comments SHALL NOT be edited or deleted in this version. A read-only Workspace SHALL refuse comments.
+The system SHALL let a designated reviewer start a thread on a submitted report and the report's author reply to it. The author MAY reply once any comment of either kind (a comment or a decision reason) by someone else exists. Nobody else SHALL post, and that includes an Admin who is not a designated reviewer. The author SHALL NOT start a thread. A reviewer's comment SHALL count as a look at the report. Comments SHALL NOT be edited or deleted in this version. A read-only Workspace SHALL refuse comments. The review state SHALL NOT limit comments: an approved report SHALL still accept comments, replies and follow-up tasks, because they do not change its content.
 
 #### Scenario: Reviewer starts
 - **WHEN** a designated reviewer posts the first comment on a report
@@ -30,6 +30,10 @@ The system SHALL let a designated reviewer start a thread on a submitted report 
 #### Scenario: Colleague posts
 - **WHEN** a Staff colleague posts on someone else's report
 - **THEN** the response is 404
+
+#### Scenario: Comment on an approved report
+- **WHEN** a designated reviewer comments with a follow-up task on an approved report
+- **THEN** the response is 201 and the task is created
 
 #### Scenario: Read-only Workspace
 - **WHEN** anyone posts in a read-only Workspace

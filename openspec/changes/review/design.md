@@ -10,7 +10,7 @@ Repos and branches: backend `c:\Users\HP\Desktop\backecn-reportlee\reportlee-bac
 
 | # | Decision | Why |
 |---|---|---|
-| D1 (V1) | Reviewer = current Head of the report's Space. If the Space has no Head, or the author is a Head, the Workspace Admins. Nobody decides own report. Drafts never reviewed. Computed at read time. | Owner decision. Reuses `ReportAccess.relation`. |
+| D1 (V1) | The author's role is checked first: a Head-role author's report goes to the Workspace Admins, even when the Space has a different Head. Otherwise the reviewer is the current Head of the report's Space, or the Admins when the Space has no Head. Nobody decides own report. Drafts never reviewed. Computed at read time. | Owner decision. Reuses `ReportAccess.relation`. |
 | D2 (V2) | Any Admin may read and decide any submitted report of the Workspace that they did not write, including overriding a Head. | Owner decision. |
 | D3 (V3) | Decisions `approve`, `reject`, `reopen`. Reject and reopen need a reason, stored as a comment of kind `decision`. Approved is locked until reopened. Reopen returns to pending. Admins bulk approve. | Owner decision. |
 | D4 (V4) | `seen` starts the window once, idempotently. Windows and delete rule as in the `reports` change. | Owner decision. |
@@ -27,7 +27,7 @@ Repos and branches: backend `c:\Users\HP\Desktop\backecn-reportlee\reportlee-bac
 | D15 | Assignee: active Staff or Head Membership of the Workspace, not the assigner. The frontend discussion screen offers the report's author (a Staff or Head); the server accepts any such member. | Admins author nothing. Recorded as a default, see Assumptions. |
 | D16 | Notification table is extended additively: nullable `workspace_id`, `membership_id`, `href`, and four enum values. `role` stays NOT NULL with the existing fallback. | Backward compatible. |
 | D17 | Notifications are written after the business transaction commits by `ReviewNotifier`, which maps recipient Membership to user. Failures are logged without personal data and never fail the request. | Matches the existing fire-and-forget `notify()` and `invitation.service.ts`. |
-| D18 | Email queued after commit with try/catch (pattern of `invitation.service.ts`). `DecisionEmail.queue` reads the author's address from the user row after commit and calls `EmailQueueService.add(EmailJobNames.DECISION, { message: { to, subject }, template: EmailTemplates.DECISION, locals, idempotencyKey: "decision:<eventId>" })`. The queue needs `message.to` at enqueue time, so the address is in the Redis job and nowhere else. Failure logging uses report id and job name only, and any error text goes through `redactEmails` from `@/helpers/log-redact.helper`. `EmailTemplates.DECISION` is added to the closed enum in `src/enums/mail/mail.enums.ts`. | V8, no address in logs. A stable key stops a retry from sending twice. |
+| D18 | Email queued after commit with try/catch (pattern of `invitation.service.ts`). `ReviewNotifier.decisionEmail` (in `report-events.ts`) reads the author's address from the user row after commit and calls `EmailQueueService.add(EmailJobNames.DECISION, { message: { to, subject }, template: EmailTemplates.DECISION, locals: { name, title, body, reportUrl, workspaceName }, idempotencyKey: "decision:<eventId>" })`. The reason is not in the locals or the template (design review finding 4): the email says to open the report to read it. `insertEvent` returns the new event id for the key. The queue needs `message.to` at enqueue time, so the address is in the Redis job and nowhere else. Failure logging uses report id and job name only, and any error text goes through `redactEmails` from `@/helpers/log-redact.helper`. `EmailTemplates.DECISION` is added to the closed enum in `src/enums/mail/mail.enums.ts`. | V8, no address in logs. A stable key stops a retry from sending twice. |
 | D19 | C1 is fixed in the frontend by `reviewerLabel` in `src/lib/review.ts`. No API change. | `reviewersFor` lacks the Head-author case in a label. |
 | D20 | Audit rows in the same transaction: new `AuditAction` values `report.decided`, `report.reopened`, `task.created`, `task.moved`. Summary holds ids and keys only. | Brief: audit rows if trivial. |
 | D21 | Task status moves are allowed in a read-only Workspace. Creating a task and commenting are not. | The brief lists submit, review and comment as blocked. Moves are not listed. Flagged as a default. |
@@ -128,6 +128,8 @@ Body schema (strict): `body` required string, at most 6000 raw characters; `foll
 
 `assertComment` order: load (404 as above); draft: 404; relation `none`: 404; read-only Workspace: 403 `WORKSPACE_READ_ONLY`; relation `reviewer`: allowed; relation `author`: allowed only when the report already has a comment of either kind (`comment` or `decision`) written by someone other than the author, else 403 `REVIEWER_MUST_START`, so the author can answer a rejection reason; relation `admin` (not designated): 403 `NOT_REVIEWER`. For relation `reviewer`, `markSeen` runs in the same transaction (D12). Then `plainText` on `body` (1..2000, else 400 `{ "body": "Write a comment of up to 2000 characters." }`). `followUp` with relation `author`: 403 `REVIEWER_MUST_START`. Assignee check: active Staff or Head Membership of the Workspace, not the caller, else 400 `{ "followUp.assigneeMembershipId": "Choose an active Staff member or Head of this Workspace." }`. The title is sanitized like a comment and must still be 1..200.
 
+State is not checked by `assertComment`: an approved report accepts comments, replies and tasks (design review finding 3).
+
 Transaction: insert comment, insert task (when `followUp`), audit `task.created`. After commit: notifier (reviewer comment to author; author reply to the designated reviewers; task to assignee).
 
 201: `CommentDto` of the new comment, with `taskId` set when a task was created.
@@ -148,7 +150,7 @@ Body schema (strict): `workspaceId` digit string, `reportIds` array of 1 to 100 
 
 ### E17 `GET /tasks`
 
-Query: `workspaceId` required, `view` one of `mine`, `by`, `space`, `all`. Allowed views: staff `mine`; head `mine`, `by`, `space`; admin `by`, `all`. Other: 403 `{ "message": "You cannot use this view.", "code": "VIEW_NOT_ALLOWED" }`. `space` for a Head without a Space: empty list. Tasks whose report has `deleted_at` set are dropped (D25). Done tasks with `completed_at` older than 14 days are dropped. There is no way to ask for older ones. Ordered by `due_on`, `id`, capped at 500.
+Query: `workspaceId` required, `view` one of `mine`, `by`, `space`, `all`. Allowed views: staff `mine`; head `mine`, `by`, `space`; admin `by`, `all`. Other: 403 `{ "message": "You cannot use this view.", "code": "VIEW_NOT_ALLOWED" }`. `mine`: assignee is the caller. `by`: assigner is the caller. `space`: the assignee's Membership is in a Space the caller is Head of. `all`: every task of the Workspace. `space` for a Head without a Space: empty list. Tasks whose report has `deleted_at` set are dropped (D25). Done tasks with `completed_at` older than 14 days are dropped. There is no way to ask for older ones. Ordered by `due_on`, `id`, capped at 500.
 
 200: `[TaskDto]`.
 
@@ -217,17 +219,30 @@ Notifications written before this change have `workspace_id` null and show witho
 
 ### `ReportAccess` changes
 
-`Relation` becomes `"author" | "reviewer" | "admin" | "none"`. `relation()` returns `admin` for an Admin who is not the author of a submitted report and is not the designated reviewer. `assertRead` allows `author`, `reviewer` and `admin`. New methods `assertSeen`, `assertDecide`, `assertComment` as above. `assertAuthor` (used by submit, edit, delete) treats `admin` like `reviewer` (403 `NOT_AUTHOR`) so nothing changes for existing author routes. A new pure `ReportAccess.decideAllowed(role, relation)` is shared with the queue and the notifier so reviewers come from the same code.
+`Relation` becomes `"author" | "reviewer" | "admin" | "none"`. `relation()` returns `admin` for an Admin who is not the author of a submitted report and is not the designated reviewer. Its order, as built (design review finding 1):
+
+```ts
+if (caller.membershipId === report.authorMembershipId) return "author";
+if (report.submissionStatus === "draft") return "none";
+const space = await spaceHead(tx, report.spaceId);
+const authorIsHead = (await membershipRole(tx, report.authorMembershipId)) === "head";
+const adminsReview = !space?.head || authorIsHead;
+if (!adminsReview && space?.head === caller.membershipId) return "reviewer";
+if (caller.role === "admin") return adminsReview ? "reviewer" : "admin";
+return "none";
+```
+
+`markSeen(tx, report, actor, now, { startWindow, event })` (finding 5): the explicit look (E12) writes a `seen` event whenever it starts a new window; a decision or comment writes one only when `firstSeenAt` was null. Reopen never starts a window. The queue, the notifier and the access code use the same rule; the notifier's `reviewersOf` and the queue's Head scope (`author role <> 'head'`) mirror it. `assertRead` allows `author`, `reviewer` and `admin`. New methods `assertSeen`, `assertDecide`, `assertComment` as above. `assertAuthor` (used by submit, edit, delete) treats `admin` like `reviewer` (403 `NOT_AUTHOR`) so nothing changes for existing author routes. A new pure `ReportAccess.decideAllowed(role, relation)` is shared with the queue and the notifier so reviewers come from the same code.
 
 Existing tests that asserted 404 for an Admin on a headed Space's Staff report (`tests/report-access.test.ts`, `tests/reports.test.ts`) are changed on purpose to expect the report, and the change is named in the commit message.
 
 ### Notifications and email
 
-`ReviewNotifier` (`src/modules/notifications/report-events.ts`) has `decision`, `comment`, `submission`, `task`. It receives Membership ids, maps them to user ids, and calls `NotificationService.notify(userId, type, title, message, metadata, { workspaceId, membershipId, href })`. Reviewers of a report come from the same relation rule: the Head of the Space, or the Admins when none or the author is a Head. `ReportService.submit` calls `ReviewNotifier.submission` after commit.
+`ReviewNotifier` (`src/modules/notifications/report-events.ts`) has `decision`, `comment`, `submission`, `task`. It receives Membership ids, skips any Membership that is not active at send time (finding 10; the decision email too), maps them to user ids, and calls `NotificationService.notify(userId, type, title, message, metadata, { workspaceId, membershipId, href })`. Reviewers of a report come from the same relation rule: the Head of the Space, or the Admins when none or the author is a Head. `ReportService.submit` calls `ReviewNotifier.submission` after commit.
 
 Titles and messages live in `notification.message.ts`, for example title "Your report was approved", message "A reviewer approved your report." The reason text is never in a notification.
 
-Email: `EmailJobNames.DECISION`, `EmailTemplates.DECISION`, template `src/emails/decision/html.hbs` copied from the `invitation` structure. Locals `{ name, decision, reason, reportUrl, workspaceName }`, built from `FRONTEND_URL` (verification item 5). Handlebars `{{ }}` escapes the reason. Subjects "Your report was approved" and "Your report needs changes".
+Email: `EmailJobNames.DECISION`, `EmailTemplates.DECISION`, template `src/emails/decision/html.hbs` copied from the `invitation` structure. Locals `{ name, title, body, reportUrl, workspaceName }`, built from `FRONTEND_URL`. No reason in the email (finding 4). Subjects "Your report was approved" and "Your report needs changes".
 
 ## Data
 
@@ -238,12 +253,12 @@ Migration `reportlee-backend/src/db/migrations/0003_review.sql`, hand-written, L
 | enum `comment_kind` | new: `comment`, `decision` |
 | enum `task_status` | new: `todo`, `doing`, `done` |
 | enum `task_priority` | new: `low`, `medium`, `high`, `critical` |
-| table `report_comments` | new: `id` identity PK, `report_id` NOT NULL FK `reports` cascade, `author_membership_id` NOT NULL FK `memberships` restrict, `kind` `comment_kind` NOT NULL default `comment`, `body` text NOT NULL with CHECK length 1 to 2000, `created_at` timestamp NOT NULL default now. Index `(report_id, created_at)`. |
-| table `tasks` | new: `id` identity PK, `workspace_id` NOT NULL FK cascade, `report_id` NOT NULL FK cascade, `comment_id` FK `report_comments` on delete set null, `title` varchar(200) NOT NULL, `assignee_membership_id` NOT NULL FK restrict, `assigned_by_membership_id` NOT NULL FK restrict, `due_on` date NOT NULL, `status` `task_status` NOT NULL default `todo`, `priority` `task_priority` NOT NULL, `completion_note` text, `completion_file` jsonb, `completed_at` timestamptz, `created_at`, `updated_at` timestamp NOT NULL default now. CHECKs: title length 1 to 200, note length at most 1000, `(status = 'done') = (completed_at IS NOT NULL)`. Indexes: `(assignee_membership_id, status)`, `(workspace_id, assigned_by_membership_id)`, `(report_id)`, unique `(comment_id)` where `comment_id IS NOT NULL`. |
+| table `report_comments` | new: `id` identity PK, `report_id` NOT NULL FK `reports` cascade, `author_membership_id` NOT NULL FK `memberships` restrict, `kind` `comment_kind` NOT NULL default `comment`, `body` text NOT NULL with CHECK length 1 to 2000, `created_at` timestamptz NOT NULL default now (finding 7). Index `(report_id, created_at)`. |
+| table `tasks` | new: `id` identity PK, `workspace_id` NOT NULL FK cascade, `report_id` NOT NULL FK cascade, `comment_id` FK `report_comments` on delete set null, `title` varchar(200) NOT NULL, `assignee_membership_id` NOT NULL FK restrict, `assigned_by_membership_id` NOT NULL FK restrict, `due_on` date NOT NULL, `status` `task_status` NOT NULL default `todo`, `priority` `task_priority` NOT NULL, `completion_note` text, `completion_file` jsonb, `completed_at` timestamptz, `created_at`, `updated_at` timestamptz NOT NULL default now. CHECKs: title length 1 to 200, note length at most 1000, `(status = 'done') = (completed_at IS NOT NULL)`. Indexes: `(assignee_membership_id, status)`, `(workspace_id, assigned_by_membership_id)`, `(report_id)`, unique `(comment_id)` where `comment_id IS NOT NULL`. |
 | table `notifications` | add nullable `workspace_id` FK `workspaces` cascade, `membership_id` FK `memberships` set null, `href` varchar(255). Index `(user_id, workspace_id, read_at)`. |
 | enum `notification_type` | add `decision`, `comment`, `task`, `submission` with `ADD VALUE IF NOT EXISTS`, as the last statements, not used in the file. |
 
-Migration content (to be created in ticket BE-1; it is not written in this step):
+Migration content (as applied in BE-1, commit 2c86109; the file in the backend repo is the source):
 
 ```sql
 DO $$ BEGIN CREATE TYPE "public"."comment_kind" AS ENUM('comment', 'decision'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -258,7 +273,7 @@ CREATE TABLE IF NOT EXISTS "report_comments" (
 	"author_membership_id" integer NOT NULL,
 	"kind" "comment_kind" DEFAULT 'comment' NOT NULL,
 	"body" text NOT NULL,
-	"created_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamptz DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 DO $$ BEGIN ALTER TABLE "report_comments" ADD CONSTRAINT "report_comments_report_fk" FOREIGN KEY ("report_id") REFERENCES "reports"("id") ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -283,8 +298,8 @@ CREATE TABLE IF NOT EXISTS "tasks" (
 	"completion_note" text,
 	"completion_file" jsonb,
 	"completed_at" timestamptz,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"created_at" timestamptz DEFAULT now() NOT NULL,
+	"updated_at" timestamptz DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 DO $$ BEGIN ALTER TABLE "tasks" ADD CONSTRAINT "tasks_workspace_fk" FOREIGN KEY ("workspace_id") REFERENCES "workspaces"("id") ON DELETE CASCADE; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -342,7 +357,7 @@ Backward compatibility: every change is additive. A backend running the new code
 
 ### API modules (all calls through `src/lib`, base URL from `NEXT_PUBLIC_API_URL` only, tokens in memory)
 
-New files, each following `reports-api.ts` (`apiCall`, `authed`, `UNREACHABLE`, `FieldErrors`): `review-api.ts` (`markSeen`, `decide`, `loadQueue`, `bulkApprove`), `discussion-api.ts` (`postComment`), `tasks-api.ts` (`listTasks`, `moveTask`), `notifications-api.ts` (`listNotifications`, `unreadCount`, `markRead`, `markAllRead`). Each returns the `Call<T>` shape of `src/lib/api.ts`: `{ ok: true, status, data } | { ok: false, status, message, fieldErrors?, code? }`. `src/lib/report-errors.ts` gets the new codes mapped to sentences: `NOT_REVIEWER`, `NOT_AUTHOR_CANNOT_DECIDE`, `NOT_APPROVED`, `REVIEWER_MUST_START`, `NOT_ASSIGNEE`, `VIEW_NOT_ALLOWED`, `NOT_FOUND`, `INTERNAL`, and sentences for the bulk skip codes `REPORT_APPROVED`, `NOT_SUBMITTED` and `WORKSPACE_READ_ONLY`.
+New files: `review-api.ts` (`markSeen`, `decide`, `loadQueue`, `bulkApprove`), `discussion-api.ts` (`postComment`), `tasks-api.ts` (`listTasks`, `moveTask`), `notifications-api.ts` (`listNotifications`, `unreadCount`, `markRead`, `markAllRead`). Each function returns `ApiResult<T>` from `src/lib/api.ts` via `apiCall(method, path, body, fallback)`, as `reports-api.ts` does. Field errors are read from `result.fields`. No new shape (design review finding 2). While `SIMULATED_AUTH` is true `apiCall` fails with status 0 and the screens show the existing message. `src/lib/report-errors.ts` gets the new codes mapped to sentences: `NOT_REVIEWER`, `NOT_AUTHOR_CANNOT_DECIDE`, `NOT_APPROVED`, `REVIEWER_MUST_START`, `NOT_ASSIGNEE`, `VIEW_NOT_ALLOWED`, `NOT_FOUND`, `INTERNAL`, and sentences for the bulk skip codes `REPORT_APPROVED`, `NOT_SUBMITTED` and `WORKSPACE_READ_ONLY`.
 
 ### Mirrored types (files that change)
 
@@ -436,7 +451,9 @@ The backend deploys first. Everything is additive.
 - AC11: Only the assignee moves a task (`NOT_ASSIGNEE` for assigner, other Head, Admin). `completedAt` is set on done and cleared on leaving done. A 15 day old done task is not listed.
 - AC12: Views per role: staff `mine`, head `mine|by|space`, admin `by|all`, anything else 403.
 - AC13: Notifications per D7 with workspace id and href, scoped per Workspace, unread count and mark read correct, another user's row is not changed, tag creates nothing.
-- AC14: Decision email queued for approve and reject only, not when the switch is off, not for reopen or comments, queue failure does not fail the decision, logs hold no address.
+- AC14: Decision email queued for approve and reject only, not when the switch is off, not for reopen or comments, queue failure does not fail the decision, logs hold no address, the job holds no reason text, a deactivated author gets none.
+- AC26 (finding 1): A Head-role author in a Space whose Head is someone else: that Head gets 404 on read, seen, decide and comment, the report is not in that Head's queue, and the Admins are the reviewers.
+- AC27 (finding 3): A reviewer comments with a follow-up on an approved report: 201.
 - AC15: Queue scope per role, drafts excluded, missing list excludes Admins and deactivated members and counts drafts as missing, Staff get 403.
 - AC16: Migration applies twice without error, with LF endings, and `npm run migrate` the second time reports "already recorded".
 - AC17 (C1): `reviewerLabel` gives the Head, or "Workspace admins" for no Head, Head author and deactivated Head.
@@ -448,7 +465,7 @@ The backend deploys first. Everything is additive.
 
 - Emails for comments, tasks and submissions.
 - Websocket client for notifications.
-- Pagination for the queue, tasks and the notification `total` (counts fetched rows today).
+- Pagination for the queue, tasks and the notification `total` (counts fetched rows today). The 500-row caps on the queue and tasks truncate silently in v1 (finding 8).
 - Comment edit and delete.
 - Real file upload for task completion files.
 - Audit log screen.

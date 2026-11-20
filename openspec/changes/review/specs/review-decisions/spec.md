@@ -4,7 +4,7 @@ Defines who reviews a report, how a reviewer approves, rejects or reopens it, ho
 ## ADDED Requirements
 
 ### Requirement: Reviewers of a report
-The system SHALL compute the reviewers of a submitted report at read time from the current state. The reviewer is the current Head of the report's Space. When the Space has no Head, or the author is a Head, the reviewers are the Workspace Admins. Nobody SHALL decide on their own report, Admins included. A draft SHALL have no reviewer and SHALL never appear in a queue. This requirement supersedes the scenario "Admin reads a Staff report in a Space with a Head" of the `reports` change: an Admin SHALL now read any submitted report in their Workspace.
+The system SHALL compute the reviewers of a submitted report at read time from the current state, checking the author's role first. When the author holds the Head role, the reviewers SHALL be the Workspace Admins, even when the author's Space has a different Head. Otherwise the reviewer is the current Head of the report's Space, or the Workspace Admins when the Space has no Head. Nobody SHALL decide on their own report, Admins included. A draft SHALL have no reviewer and SHALL never appear in a queue. This requirement supersedes the scenario "Admin reads a Staff report in a Space with a Head" of the `reports` change: an Admin SHALL now read any submitted report in their Workspace.
 
 #### Scenario: Head removed from a Space
 - **WHEN** a Space loses its Head after a Staff report was submitted
@@ -14,12 +14,16 @@ The system SHALL compute the reviewers of a submitted report at read time from t
 - **WHEN** an Admin asks for a submitted Staff report in a Space that has a Head
 - **THEN** they receive it
 
+#### Scenario: Head-role author in a Space whose Head is someone else
+- **WHEN** a member with the Head role submits a report in a Space whose Head is a different person
+- **THEN** that Head gets 404 on read, seen, decide and comment, and the Workspace Admins are the designated reviewers
+
 #### Scenario: Draft is hidden
 - **WHEN** an Admin or Head asks for a draft by id
 - **THEN** the response is 404
 
 ### Requirement: Decide on a report
-The system SHALL accept the decisions approve, reject and reopen on a submitted report. The Head of the report's Space MAY decide reports in that Space that they did not write. An Admin MAY decide any submitted report in their Workspace that they did not write. Staff SHALL NOT decide and SHALL get 404, as for any report they may not read. A caller outside the report's Workspace, or a Head outside the report's Space, SHALL get 404. A read-only Workspace SHALL refuse every decision.
+The system SHALL accept the decisions approve, reject and reopen on a submitted report. The Head of the report's Space MAY decide reports in that Space that they did not write, except a report whose author holds the Head role. An Admin MAY decide any submitted report in their Workspace that they did not write. Staff SHALL NOT decide and SHALL get 404, as for any report they may not read. A caller outside the report's Workspace, or a Head outside the report's Space, SHALL get 404. A read-only Workspace SHALL refuse every decision.
 
 #### Scenario: Head approves in own Space
 - **WHEN** a Head approves a Staff report in their own Space

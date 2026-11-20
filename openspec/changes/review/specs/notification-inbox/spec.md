@@ -52,7 +52,7 @@ The system SHALL list, count and mark read only the caller's own notifications, 
 - **THEN** the screen shows an empty state and no sample items
 
 ### Requirement: Decision email
-The system SHALL queue one email to the author for an approve or reject decision, after the decision is saved, when `DECISION_EMAILS_ENABLED` is true (default true). It SHALL NOT email for reopen, comments, tasks or submissions. The email SHALL escape the reason and SHALL use a stable key per decision so a retry sends once. A failure to queue SHALL NOT fail the decision. The system SHALL NOT write the address to any log.
+The system SHALL queue one email to the author for an approve or reject decision, after the decision is saved, when `DECISION_EMAILS_ENABLED` is true (default true). It SHALL NOT email for reopen, comments, tasks or submissions. The email SHALL NOT contain the reason text: it SHALL tell the author to open the report to read it, with a link to the report. It SHALL use a stable key per decision so a retry sends once. No email or notification SHALL go to a Membership that is not active when it is sent. A failure to queue SHALL NOT fail the decision. The system SHALL NOT write the address to any log.
 
 #### Scenario: Approve
 - **WHEN** a reviewer approves a report
@@ -61,6 +61,10 @@ The system SHALL queue one email to the author for an approve or reject decision
 #### Scenario: Switch off
 - **WHEN** `DECISION_EMAILS_ENABLED` is false and a reviewer rejects a report
 - **THEN** no email job is queued and the in-app notification still exists
+
+#### Scenario: Reason stays in the app
+- **WHEN** a reviewer rejects a report with a reason
+- **THEN** the queued email contains the report link and not the reason text
 
 #### Scenario: Reopen
 - **WHEN** a reviewer reopens a report
