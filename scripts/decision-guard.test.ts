@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { SAMPLE_NOW, SAMPLE_REPORTS } from "../src/data/reports.ts";
-import { decisionGuard } from "../src/lib/review.ts";
+import { decisionGuard, type ReviewViewer } from "../src/lib/review.ts";
 
 /* @info - Which decision buttons are live. The server repeats every rule; this keeps
    the controls honest: an approved report can only be reopened, and only an approved
    report can be reopened. */
-const reviewer = {
+const reviewer: ReviewViewer = {
   membershipId: "mem_admin",
-  role: "admin" as const,
+  role: "admin",
   space: null,
 };
 const base = {
@@ -23,7 +23,7 @@ const withStatus = (reviewStatus: "pending" | "approved" | "rejected") => ({
 const ask = (
   decision: "approve" | "reject" | "reopen",
   reviewStatus: "pending" | "approved" | "rejected",
-  extra: { readOnly?: boolean; viewer?: typeof reviewer } = {},
+  extra: { readOnly?: boolean; viewer?: ReviewViewer } = {},
 ) =>
   decisionGuard({
     report: withStatus(reviewStatus),
