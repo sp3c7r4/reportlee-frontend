@@ -13,14 +13,14 @@
 - [ ] BE-7 (steps 1 to 4 done in be-build, see Validation; the full `npm test` and `npm run build` are left for the final Gate 3) Backend Gate 3, once: `npx biome check <touched files>`, `npx tsc --noEmit`, `npm run check:circular`, the touched suites, `npm test`, `npm run build`, em dash check, durations. Paste under Validation.
 
 ## 3. Frontend (repo `reportlee-frontend`, branch `feat/review`), after BE-7 is green
-- [ ] FE-1 `src/lib/api-types.ts`, `review-api.ts`, `discussion-api.ts`, `tasks-api.ts`, `notifications-api.ts`, `report-errors.ts` codes (incl. `NOT_FOUND`, `INTERNAL`, bulk skip codes), `Call<T>` shape with `fieldErrors`, `/dashboard/` href check in the notification mapper, with `scripts/review-api.test.ts`, `tasks-api.test.ts`, `notifications-api.test.ts` red first. Verify: `npm test`, `npx tsc --noEmit`.
-- [ ] FE-2 C1: `reviewerLabel` in `src/lib/review.ts`, used in `report-view.tsx`, with `scripts/reviewer-label.test.ts` (Head, no Head, Head author, deactivated Head). Verify: `npm test`.
-- [ ] FE-3 `review-queue.tsx` on `GET /review/queue`: decisions, reasons, bulk approve, loading, empty, error. Verify: `npx tsc --noEmit`, manual pass.
-- [ ] FE-4 `report-view.tsx` (seen once, no localStorage tasks), `report-discussion.tsx` (comments and follow-up), `report-timeline.tsx` (server events). Verify: `npx tsc --noEmit`, manual pass.
-- [ ] FE-5 `task-board.tsx` and `home-screen.tsx` on `GET /tasks` and `PATCH /tasks/:id`, no `SAMPLE_TASKS`; Home requests `viewsFor(viewer)[0]` with inline error and retry; remove the "Show older" control. Verify: `npx tsc --noEmit`, manual pass.
-- [ ] FE-6 `notifications-screen.tsx` and `notification-bell.tsx` on the API, 60 second poll, scoped by Workspace. Verify: `npx tsc --noEmit`, manual pass.
-- [ ] FE-7 `docs/ROADMAP.md`: C3 Done row (check it does not exist yet), slice 3 row when verified, Backlog lines. Update Validation.
-- [ ] FE-8 Frontend Gate 3: `npx biome check <touched files>`, `npx tsc --noEmit`, `npm test`, `npm run build`, em dash check. Never `npm run format`. Paste under Validation.
+- [x] FE-1 `src/lib/api-types.ts`, `review-api.ts`, `discussion-api.ts`, `tasks-api.ts`, `notifications-api.ts`, `report-errors.ts` codes (incl. `NOT_FOUND`, `INTERNAL`, bulk skip codes), `Call<T>` shape with `fieldErrors`, `/dashboard/` href check in the notification mapper, with `scripts/review-api.test.ts`, `tasks-api.test.ts`, `notifications-api.test.ts` red first. Verify: `npm test`, `npx tsc --noEmit`.
+- [x] FE-2 C1: `reviewerLabel` in `src/lib/review.ts`, used in `report-view.tsx`, with `scripts/reviewer-label.test.ts` (Head, no Head, Head author, deactivated Head). Verify: `npm test`.
+- [x] FE-3 `review-queue.tsx` on `GET /review/queue`: decisions, reasons, bulk approve, loading, empty, error. Verify: `npx tsc --noEmit`, manual pass.
+- [x] FE-4 `report-view.tsx` (seen once, no localStorage tasks), `report-discussion.tsx` (comments and follow-up), `report-timeline.tsx` (server events). Verify: `npx tsc --noEmit`, manual pass.
+- [x] FE-5 `task-board.tsx` and `home-screen.tsx` on `GET /tasks` and `PATCH /tasks/:id`, no `SAMPLE_TASKS`; Home requests `viewsFor(viewer)[0]` with inline error and retry; remove the "Show older" control. Verify: `npx tsc --noEmit`, manual pass.
+- [x] FE-6 `notifications-screen.tsx` and `notification-bell.tsx` on the API, 60 second poll, scoped by Workspace. Verify: `npx tsc --noEmit`, manual pass.
+- [x] FE-7 `docs/ROADMAP.md`: C3 Done row (check it does not exist yet), slice 3 row when verified, Backlog lines. Update Validation.
+- [x] FE-8 (build compiled; its type-check step is blocked by the owner dev server, see Validation) Frontend Gate 3: `npx biome check <touched files>`, `npx tsc --noEmit`, `npm test`, `npm run build`, em dash check. Never `npm run format`. Paste under Validation.
 
 ## 4. Review, live check, close
 - [ ] REV-1 Gate 4 fresh-context review (three lanes, aggregator last), max 3 rounds.
@@ -74,4 +74,32 @@ Gate 3 backend steps 1 to 4 (run in order, each started only after the previous 
 - Em dash and en dash check on the touched non-test files (`Select-String "[\u2014\u2013]"`, `rg` is not installed): 2 hits, both in comments I did not write (`.env.example` line 20, `src/db/postgres.schema.ts` line 1). No hit in a user-facing string.
 - Not run here, by instruction: the full `npm test` and `npm run build` (final Gate 3).
 
-FE-8 and the live check add their results here.
+The live check adds its results here.
+
+
+### Frontend build (fe-build, 2026-11-19), repo `reportlee-frontend`, branch `feat/review`
+Commits (not pushed): `b72adf7` FE-1 and FE-2 (API calls, error codes, `reviewerLabel`), `52bbc8b` FE-3 (review queue, `decisionGuard`), `be27315` FE-4 (report page, discussion), `304c4af` FE-5 (board and Home), `eefba98` FE-6 (notifications and bell), `d00d115` FE-7 (ROADMAP: C3 Done row dated 2026-11-18, review Backlog lines).
+
+Red then green (Node test runner):
+- `review-api`, `discussion-api`, `tasks-api`, `notifications-api` and `reviewer-label` tests were written first. First run: all failed with `ERR_MODULE_NOT_FOUND` or a missing export, because the modules did not exist. After the change: green.
+- `decision-guard.test.ts`: red with "does not provide an export named 'decisionGuard'", then 4 of 4.
+- `countAfterPoll` test: red with the same missing export, then `notifications-api.test.ts` 10 of 10.
+
+Gate 3 frontend (`.agents/tasks/review/g3-fe.out`; the 21 touched .ts and .tsx files are listed in `touched.txt`):
+1. `npx biome check <21 touched files>`: exit 0, "Checked 21 files. No fixes applied", 5s.
+2. `npx tsc --noEmit`: the only errors are 8 syntax errors inside `.next/dev/types/routes.d.ts` and `validator.ts`. The owner's running `next dev` wrote a corrupt generated line (`/dashboard/leads">> = Specific`). No error is in `src/` or `scripts/`. With `.next` excluded (a temporary `tsconfig.gate.json` covering `src` and `scripts`, deleted afterwards): exit 0, 38s.
+3. `npm test`: 356 tests, 356 pass, 0 fail, 27s (311 before this slice).
+4. `npm run build`: "Compiled successfully in 4.1min", then its own "Running TypeScript" step failed on the same `.next/dev/types` errors, so the build did not finish. The owner's dev server was not stopped. The run took 398s, over the 3 minute rule, because the compile step alone takes 4.1 min on this machine. Not verified: a clean `next build` exit. To get one, stop `next dev`, run `npm run build`, then start it again.
+5. Em dash and en dash check (`Select-String "[\u2014\u2013]"`) on the 21 touched files: 0 hits.
+6. No new dependency (`package.json` untouched).
+
+Choices made while building (no owner decision needed):
+- Raising a task is part of posting a comment: a reviewer ticks "Add a follow-up task" in the comment box and one `POST /reports/:id/comments` carries both (design E14). The old "Raise a task from this" button on an existing comment is gone, because the server ties a task to the comment that created it.
+- `canDecide` locks an approved report, which also disabled Reopen. `decisionGuard` applies the state rule per decision: an approved report accepts only Reopen, and only an approved report can be reopened.
+- The tasks call is `updateTaskStatus`, not `moveTask`, because `src/lib/tasks.ts` already exports `moveTask`.
+- Task moves are allowed in a read-only Workspace (D21), so the board no longer passes `readOnly` to the local guard.
+- The author sees the reply box only after someone else has commented. The server still refuses a start with `REVIEWER_MUST_START`.
+- `getReport` now maps `taskId: null` to no `taskId` through `reportFrom`, so every screen sees one comment shape.
+- Names and the "Reviewed by" line come from `listMembers`. If that call fails the label reads "Not available" and names read "Former member".
+
+Not verified here: the screens in a browser (no browser pass in this step) and the 60 second poll.
