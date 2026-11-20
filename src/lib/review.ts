@@ -163,6 +163,43 @@ export function canDecide(input: {
   return { allowed: true, reason: null };
 }
 
+/**
+ * Whether one decision button is live. `canDecide` answers for a Report as a whole, and
+ * it treats approved as locked, which would also lock Reopen. The state rule is applied
+ * here per decision instead: an approved Report accepts only a reopen, and only an
+ * approved Report can be reopened.
+ */
+export function decisionGuard(input: {
+  report: Report;
+  viewer: ReviewViewer;
+  readOnly: boolean;
+  now: string;
+  decision: Decision;
+}): DecisionGuard {
+  const approved = input.report.reviewStatus === "approved";
+  const base = canDecide({
+    ...input,
+    report: approved
+      ? { ...input.report, reviewStatus: "pending" }
+      : input.report,
+  });
+  if (!base.allowed) return base;
+  if (input.decision === "reopen" && !approved) {
+    return {
+      allowed: false,
+      reason: "Only an approved Report can be reopened.",
+    };
+  }
+  if (input.decision !== "reopen" && approved) {
+    return {
+      allowed: false,
+      reason:
+        "This Report is approved. Reopen it first to change the decision.",
+    };
+  }
+  return base;
+}
+
 /** The one place a decision's required reason is defined. */
 export function decisionBlocked(
   decision: Decision,
