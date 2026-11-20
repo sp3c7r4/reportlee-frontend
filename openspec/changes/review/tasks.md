@@ -103,3 +103,21 @@ Choices made while building (no owner decision needed):
 - Names and the "Reviewed by" line come from `listMembers`. If that call fails the label reads "Not available" and names read "Former member".
 
 Not verified here: the screens in a browser (no browser pass in this step) and the 60 second poll.
+
+### Gate 3 final and integration check (gate3, 2026-11-20), both repos, branch `feat/review`
+Integration (read, round 1): the seams match. Ids are strings in task, comment, report, queue and bulk DTOs (`TaskDto`, `CommentDto`, `ApiBulkResult`). Notification `id` is still a number (existing shape, additive); `notificationFrom` converts it to a string and `workspaceId` is a string. The notification list answers `{ data, total, page, limit }` and the frontend reads `data`. Unread count is `{ count }`, mark read `{ updated }`, bulk approve `{ approved, skipped:[{id,code}] }`, and the review error codes in `api-types.ts` match `REVIEW_CODES`. No mismatch found.
+
+Frontend (`.agents/tasks/review/g3-fe.out`), chained, stops at first failure:
+1. `npx biome check` on 21 touched files: exit 0, 5.4s.
+2. `npx tsc --noEmit`: the plain command fails with 8 syntax errors, all in `.next/dev/types/routes.d.ts` and `validator.ts` (corrupt generated files from the owner's running `next dev`, not source). With a temporary tsconfig that leaves out `.next` (deleted afterwards): exit 0, 34s.
+3. `npm test`: 356 tests, 356 pass, 0 fail, 24.9s.
+4. `npm run build`: exit 0, 295s. Its own TypeScript step reads `.next/dev/types` too, so the corrupt `types` folder was moved (not deleted) to `.agents/tasks/review/next-dev-types-corrupt-backup` first. `next dev` was not stopped and regenerates that folder. The step took over 3 minutes: Turbopack compile 24s, TypeScript 2.8 min.
+5. `rg -n "[\u2014\u2013]"` on the 21 touched files: no hits.
+
+Backend (`.agents/tasks/review/g3-be.out`), chained:
+1. `npx biome check` on 58 touched files: exit 0, 5.2s.
+2. `npx tsc --noEmit`: exit 0, 38.4s.
+3. `npm run check:circular`: only the known cycle `user.model <-> user-role.model`, no new one. 8.8s.
+4. Touched suites (8 files: migration-0003, report-comments, reports, review-decisions, review-notifications, review-queue, review-seen, tasks): 156 tests pass, 433s.
+5. Full `npm test`: 37 files, 488 tests, 488 pass, 0 fail, 370s.
+6. `npm run build`: exit 0, 6.1s.
