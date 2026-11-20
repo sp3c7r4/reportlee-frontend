@@ -2,13 +2,21 @@ import {
   CODE_ADMIN_CANNOT_AUTHOR,
   CODE_ALREADY_SUBMITTED,
   CODE_EDIT_WINDOW_CLOSED,
+  CODE_INTERNAL,
   CODE_NO_SPACE,
+  CODE_NOT_APPROVED,
+  CODE_NOT_ASSIGNEE,
   CODE_NOT_AUTHOR,
+  CODE_NOT_AUTHOR_CANNOT_DECIDE,
+  CODE_NOT_FOUND,
+  CODE_NOT_REVIEWER,
   CODE_NOT_SUBMITTED,
   CODE_PERIOD_CLOSED,
   CODE_PERIOD_NOT_OPEN,
   CODE_REPORT_APPROVED,
   CODE_REPORT_SEEN,
+  CODE_REVIEWER_MUST_START,
+  CODE_VIEW_NOT_ALLOWED,
   CODE_WORKSPACE_READ_ONLY,
 } from "./api-types.ts";
 import type { Role } from "./nav.ts";
@@ -36,6 +44,16 @@ const MESSAGE: Record<string, string> = {
   [CODE_NOT_AUTHOR]: "Only the author can do that.",
   [CODE_ADMIN_CANNOT_AUTHOR]: "Admins review reports and do not submit them.",
   [CODE_NO_SPACE]: "You are not in a Space yet. Ask an Admin to add you.",
+  [CODE_NOT_REVIEWER]: "Only a reviewer of this report can do that.",
+  [CODE_NOT_AUTHOR_CANNOT_DECIDE]: "Nobody decides on their own report.",
+  [CODE_NOT_APPROVED]: "Only an approved report can be reopened.",
+  [CODE_REVIEWER_MUST_START]:
+    "A reviewer starts the conversation. You can reply once they have.",
+  [CODE_NOT_ASSIGNEE]:
+    "Only the person it is assigned to can change this task.",
+  [CODE_VIEW_NOT_ALLOWED]: "You cannot use this view.",
+  [CODE_NOT_FOUND]: "That report is no longer available.",
+  [CODE_INTERNAL]: "Something went wrong on our side. Try again.",
 };
 
 export function reportErrorMessage(failure: {

@@ -11,6 +11,8 @@ import {
   analyticsFor,
 } from "./analytics.ts";
 import { type ApiResult, apiCall } from "./api.ts";
+import type { ApiReport } from "./api-types.ts";
+import { reportFrom } from "./discussion-api.ts";
 import { draftBody } from "./reports.ts";
 
 export type DraftBody = ReturnType<typeof draftBody>;
@@ -110,13 +112,15 @@ export function listMyDrafts(
   );
 }
 
-export function getReport(id: string): Promise<ApiResult<Report>> {
-  return apiCall(
+export async function getReport(id: string): Promise<ApiResult<Report>> {
+  const result = await apiCall<ApiReport>(
     "GET",
     `/reports/${encodeURIComponent(id)}`,
     undefined,
     "We could not load that report. Try again.",
   );
+  if (!result.ok) return result;
+  return { ...result, data: reportFrom(result.data) };
 }
 
 export function editReport(

@@ -7,8 +7,10 @@
  */
 
 import type { RosterMember, SpaceSummary } from "../data/members.ts";
+import type { Comment, Report } from "../data/reports.ts";
 import type { Membership, Workspace } from "../data/viewer.ts";
 import type { Role } from "./nav.ts";
+import type { MissingRow } from "./review.ts";
 import type { Schedule } from "./settings.ts";
 
 export type { Membership, Workspace };
@@ -87,3 +89,46 @@ export const CODE_ALREADY_SUBMITTED = "ALREADY_SUBMITTED";
 export const CODE_NOT_SUBMITTED = "NOT_SUBMITTED";
 export const CODE_NOT_AUTHOR = "NOT_AUTHOR";
 export const CODE_ADMIN_CANNOT_AUTHOR = "ADMIN_CANNOT_AUTHOR";
+
+/** Review error codes (openspec/changes/review/design.md). Screens branch on these. */
+export const CODE_NOT_REVIEWER = "NOT_REVIEWER";
+export const CODE_NOT_AUTHOR_CANNOT_DECIDE = "NOT_AUTHOR_CANNOT_DECIDE";
+export const CODE_NOT_APPROVED = "NOT_APPROVED";
+export const CODE_REVIEWER_MUST_START = "REVIEWER_MUST_START";
+export const CODE_NOT_ASSIGNEE = "NOT_ASSIGNEE";
+export const CODE_VIEW_NOT_ALLOWED = "VIEW_NOT_ALLOWED";
+export const CODE_NOT_FOUND = "NOT_FOUND";
+export const CODE_INTERNAL = "INTERNAL";
+
+/** A comment as the server sends it: `taskId` is null when no task came with it. */
+export type ApiComment = Omit<Comment, "taskId" | "attachments"> & {
+  taskId: string | null;
+};
+
+/** A Report as the server sends it once comments can carry a task id. */
+export type ApiReport = Omit<Report, "comments"> & { comments: ApiComment[] };
+
+export type ApiSeen = {
+  firstSeenAt: string | null;
+  windowStartedAt: string | null;
+};
+
+export type ApiQueue = { reports: ApiReport[]; missing: MissingRow[] };
+
+export type ApiBulkResult = {
+  approved: string[];
+  skipped: { id: string; code: string }[];
+};
+
+/** `type` also holds `system` and `account` from before this slice. */
+export type ApiNotification = {
+  id: number;
+  type: string;
+  title: string;
+  message: string;
+  metadata: Record<string, unknown>;
+  read: boolean;
+  createdAt: string;
+  workspaceId: string | null;
+  href: string | null;
+};

@@ -1,5 +1,5 @@
-import type { Report } from "../data/reports";
 import type { RosterMember } from "../data/members";
+import type { Report } from "../data/reports";
 import type { Role } from "./nav";
 
 /**
@@ -100,6 +100,27 @@ export function missingFor(input: {
       };
     })
     .filter((row) => !row.submitted);
+}
+
+/**
+ * Who reviews this Report, for the "Reviewed by" line (C1). A Head's Report always goes
+ * to the Admins, whoever heads the Space. Otherwise the Space's active Head reviews, or
+ * the Admins when it has none. The server holds the real rule; this only names it.
+ */
+export function reviewerLabel(input: {
+  report: Pick<Report, "authorMembershipId">;
+  roster: RosterMember[];
+}): string {
+  const admins = "Workspace admins";
+  const author = input.roster.find(
+    (member) => member.membershipId === input.report.authorMembershipId,
+  );
+  if (!author || author.role === "head" || author.space === null) return admins;
+  const head = input.roster.find(
+    (member) =>
+      member.role === "head" && member.active && member.space === author.space,
+  );
+  return head ? head.name : admins;
 }
 
 export type DecisionGuard = { allowed: boolean; reason: string | null };
