@@ -63,6 +63,14 @@ export async function fetchUnreadCount(
   return { ...result, data: result.data.count };
 }
 
+/** A poll that fails keeps the last count: a blip must not blank the badge. */
+export function countAfterPoll(
+  previous: number,
+  result: ApiResult<number>,
+): number {
+  return result.ok ? result.data : previous;
+}
+
 export async function markRead(id: string): Promise<ApiResult<boolean>> {
   const result = await apiCall<{ updated: boolean }>(
     "PATCH",

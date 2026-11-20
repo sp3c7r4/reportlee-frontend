@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
-
-import { SAMPLE_NOTIFICATIONS } from "@/data/notifications";
-import { badgeLabel, unreadCount } from "@/lib/notifications";
+import { useEffect, useState } from "react";
+import { useShell } from "@/components/dashboard/shell-context";
+import { badgeLabel } from "@/lib/notifications";
+import { countAfterPoll, fetchUnreadCount } from "@/lib/notifications-api";
 import { cn } from "@/lib/utils";
+
+/* @info - The count is polled: every minute and when the window gains focus. */
+const POLL_MS = 60_000;
 
 /**
  * The bell from the supplied artwork, with its count as a red badge.
@@ -13,12 +17,32 @@ import { cn } from "@/lib/utils";
  * the body at 60% and the clapper solid, both in `currentColor` so it follows the
  * theme instead of carrying a hard-coded black.
  *
- * The popover arrives with UI-11, so the control is disabled and says why. The count
- * is the real unread number from the sample list, not a decorative dot.
+ * The count is the unread number for the active Workspace, from the server. A failed
+ * poll keeps the last number.
  */
 export function NotificationBell({ className }: { className?: string }) {
-  const unread = unreadCount(SAMPLE_NOTIFICATIONS);
+  const { workspace } = useShell();
+  const [unread, setUnread] = useState(0);
   const label = badgeLabel(unread);
+
+  useEffect(() => {
+    let cancelled = false;
+    setUnread(0);
+    const poll = () => {
+      void fetchUnreadCount(workspace.id).then((result) => {
+        if (!cancelled)
+          setUnread((previous) => countAfterPoll(previous, result));
+      });
+    };
+    poll();
+    const timer = window.setInterval(poll, POLL_MS);
+    window.addEventListener("focus", poll);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", poll);
+    };
+  }, [workspace.id]);
 
   return (
     <Link

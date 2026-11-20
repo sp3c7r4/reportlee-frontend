@@ -5,26 +5,70 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useShell } from "@/components/dashboard/shell-context";
-import { SAMPLE_NOTIFICATIONS } from "@/data/notifications";
 import {
+  FIXED_CATEGORIES,
   type Notification,
   type NotificationCategory,
-  FIXED_CATEGORIES,
   unreadCount,
 } from "@/lib/notifications";
+import {
+  listNotifications,
+  markAllRead,
+  markRead,
+} from "@/lib/notifications-api";
+import { reportErrorMessage } from "@/lib/report-errors";
 import { cn } from "@/lib/utils";
 
 /** The bell's page. A count, never a dot: a dot cannot tell one from nine. */
 export function NotificationsScreen() {
-  const { membership, workspace } = useShell();
+  const { workspace } = useShell();
   const [items, setItems] = useState<Notification[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
 
+  /* @info - Only this Workspace's notifications are asked for, so another Workspace's
+     never show here. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: version is the retry trigger
   useEffect(() => {
-    // Simulated GET /api/v1/notifications, scoped to this Membership.
-    setItems(SAMPLE_NOTIFICATIONS);
-    setLoaded(true);
-  }, [membership.id]);
+    let cancelled = false;
+    setLoaded(false);
+    setFailure(null);
+    void listNotifications(workspace.id).then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setItems(result.data);
+      } else {
+        setItems([]);
+        setFailure(reportErrorMessage(result));
+      }
+      setLoaded(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspace.id, version]);
+
+  const readAll = async () => {
+    const before = items;
+    setNotice(null);
+    setItems((current) => current.map((item) => ({ ...item, read: true })));
+    const result = await markAllRead(workspace.id);
+    if (!result.ok) {
+      setItems(before);
+      setNotice(reportErrorMessage(result));
+    }
+  };
+
+  const readOne = (id: string) => {
+    setItems((current) =>
+      current.map((row) => (row.id === id ? { ...row, read: true } : row)),
+    );
+    /* @info - The link opens either way, so a failed mark leaves the row read here and
+       unread on the server until the next load. */
+    void markRead(id);
+  };
 
   const unread = unreadCount(items);
 
@@ -62,11 +106,7 @@ export function NotificationsScreen() {
           </Link>
           <button
             type="button"
-            onClick={() =>
-              setItems((current) =>
-                current.map((item) => ({ ...item, read: true })),
-              )
-            }
+            onClick={() => void readAll()}
             disabled={unread === 0}
             className="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-ink px-3 text-[12.5px] text-surface disabled:opacity-40 sm:min-h-9"
           >
@@ -76,11 +116,37 @@ export function NotificationsScreen() {
         </div>
       </header>
 
+      {notice ? (
+        <p
+          role="alert"
+          className="mt-3 rounded-md border border-hairline bg-surface-muted px-3 py-2 text-[12.5px] text-ink"
+        >
+          {notice}
+        </p>
+      ) : null}
+
       {!loaded ? (
-        <div className="mt-4 h-24 animate-pulse rounded-lg bg-surface-muted" />
+        <div aria-busy="true" className="mt-4">
+          <span className="sr-only">Loading</span>
+          <div className="h-24 animate-pulse rounded-lg bg-surface-muted" />
+        </div>
+      ) : failure ? (
+        <div
+          role="alert"
+          className="mt-4 rounded-lg border border-hairline p-4"
+        >
+          <p className="text-[13.5px] text-ink">{failure}</p>
+          <button
+            type="button"
+            onClick={() => setVersion((current) => current + 1)}
+            className="mt-2 min-h-11 rounded-md border border-hairline px-3 text-[13px] text-ink sm:min-h-9"
+          >
+            Retry
+          </button>
+        </div>
       ) : items.length === 0 ? (
         <p className="mt-4 rounded-lg border border-hairline border-dashed px-4 py-8 text-center text-[13px] text-ink/60">
-          Nothing has reached you yet.
+          No notifications yet.
         </p>
       ) : (
         <div className="mt-4 flex flex-col gap-4">
@@ -94,13 +160,7 @@ export function NotificationsScreen() {
                   <li key={item.id}>
                     <Link
                       href={item.href}
-                      onClick={() =>
-                        setItems((current) =>
-                          current.map((row) =>
-                            row.id === item.id ? { ...row, read: true } : row,
-                          ),
-                        )
-                      }
+                      onClick={() => readOne(item.id)}
                       className={cn(
                         "flex min-h-11 items-start justify-between gap-3 rounded-lg border border-hairline px-3 py-2.5",
                         item.read
@@ -117,6 +177,7 @@ export function NotificationsScreen() {
                       {item.read ? null : (
                         <span
                           className="mt-1 size-2 shrink-0 rounded-full bg-ink/60"
+                          role="img"
                           aria-label="Unread"
                         />
                       )}

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
 import {
+  countAfterPoll,
   fetchUnreadCount,
   listNotifications,
   markAllRead,
@@ -110,6 +111,18 @@ test("a failed list keeps the status so the screen can show an error", async () 
   const result = await listNotifications("8");
   assert.ok(!result.ok);
   assert.equal(result.status, 500);
+});
+
+test("a failed poll keeps the last count, a good one replaces it", () => {
+  assert.equal(countAfterPoll(5, { ok: true, status: 200, data: 2 }), 2);
+  assert.equal(
+    countAfterPoll(5, { ok: false, status: 500, message: "Down." }),
+    5,
+  );
+  assert.equal(
+    countAfterPoll(5, { ok: false, status: 0, message: "Offline." }),
+    5,
+  );
 });
 
 test("markRead patches one row and reports whether it changed", async () => {
