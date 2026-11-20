@@ -9,11 +9,12 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TopBarAction, useShell } from "@/components/dashboard/shell-context";
 import { Button } from "@/components/ui/button";
 import type { Report, ReportingPeriod } from "@/data/reports";
-import { SAMPLE_TASKS, type Task } from "@/data/tasks";
+import type { ApiMember } from "@/lib/api-types";
+import { listMembers } from "@/lib/members";
 import { periodTitle } from "@/lib/periods";
 import { htmlToLines } from "@/lib/report-draft";
 import { reportErrorMessage } from "@/lib/report-errors";
@@ -34,13 +35,16 @@ import {
   listMyDrafts,
   listMyReports,
 } from "@/lib/reports-api";
+import { reviewerLabel } from "@/lib/review";
+import { markSeen } from "@/lib/review-api";
 import { SUBMISSION_STATUS } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { ReportDiscussion } from "./report-discussion";
 import { ReportTimeline, StatePill } from "./report-timeline";
 
-/* @info - Reading a Report writes nothing, reviewers included: seen belongs to review.
-   Edit and Delete here are hints from the same rules; the server answer wins. */
+/* @info - Opening a Report as a reviewer calls `markSeen` once, and the server decides
+   whether that starts the window. Edit and Delete here are hints from the same rules;
+   the server answer wins. */
 
 const MINUTE = 60 * 1000;
 const PAGE = 50;
@@ -75,24 +79,19 @@ export function ReportView({ reportId }: { reportId: string }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<Task[]>([]);
-
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem("reportlee.tasks");
-      setTasks(raw ? (JSON.parse(raw) as Task[]) : SAMPLE_TASKS);
-    } catch {
-      setTasks(SAMPLE_TASKS);
-    }
-  }, []);
+  /* @info - null means the roster call failed: the label then says so instead of guessing. */
+  const [roster, setRoster] = useState<ApiMember[] | null>(null);
+  const seenFor = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     setState({ kind: "loading" });
-    const [result, open] = await Promise.all([
+    const [result, open, people] = await Promise.all([
       getReport(reportId),
       getOpenPeriods(workspace.id),
+      listMembers(workspace.id),
     ]);
     if (open.ok) setPeriods(open.data);
+    setRoster(people.ok ? people.data : null);
     if (result.ok) {
       setReport(result.data);
       setState({ kind: "ready" });
@@ -118,6 +117,27 @@ export function ReportView({ reportId }: { reportId: string }) {
     }),
     [membership.id, membership.role, membership.space],
   );
+
+  /* @info - Once per open, for a Head or an Admin who is not the author. A 403 or 404 is
+     the normal answer for an Admin who is not the designated reviewer, so it is ignored. */
+  useEffect(() => {
+    if (!report || report.authorMembershipId === membership.id) return;
+    if (membership.role === "staff") return;
+    if (seenFor.current === report.id) return;
+    seenFor.current = report.id;
+    void markSeen(report.id).then((result) => {
+      if (!result.ok) return;
+      setReport((current) =>
+        current && current.id === report.id
+          ? {
+              ...current,
+              firstSeenAt: result.data.firstSeenAt,
+              windowStartedAt: result.data.windowStartedAt,
+            }
+          : current,
+      );
+    });
+  }, [report, membership.id, membership.role]);
 
   const action = useMemo(
     () =>
@@ -380,17 +400,17 @@ export function ReportView({ reportId }: { reportId: string }) {
               }}
               readOnly={workspace.readOnly}
               now={new Date().toISOString()}
-              tasks={tasks}
-              onComment={() => {
-                /* @info - Comments arrive with the review slice. Nothing is posted. */
-                setNotice(
-                  "Comments are not saved yet. They arrive with review.",
+              roster={roster ?? []}
+              onPosted={(comment, raisedTask) => {
+                setReport((current) =>
+                  current
+                    ? { ...current, comments: [...current.comments, comment] }
+                    : current,
                 );
-              }}
-              onCreateTask={(task) => {
-                setTasks((current) => [...current, task]);
                 setNotice(
-                  `${task.title} is on the board, assigned to whoever was chosen.`,
+                  raisedTask
+                    ? "Comment posted and the follow-up task is on the board."
+                    : "Comment posted.",
                 );
               }}
             />
@@ -428,9 +448,7 @@ export function ReportView({ reportId }: { reportId: string }) {
               </dd>
               <dt className="text-ink/50">Reviewed by</dt>
               <dd className="text-ink">
-                {membership.role === "head" && isAuthor
-                  ? "Workspace Admins"
-                  : "Your Head of Space"}
+                {roster ? reviewerLabel({ report, roster }) : "Not available"}
               </dd>
             </dl>
           </section>
