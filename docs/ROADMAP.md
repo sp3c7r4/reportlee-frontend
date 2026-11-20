@@ -33,6 +33,7 @@ OpenSpec changes under `openspec/changes/`; there is no other spec location.
 | 2026-11-16 | workspaces-people: Workspaces, Spaces, People roster and invitations on the real API, invite page with return after login | tsc + tests + API (90/90 live HTTP checks); browser pass not done |
 | 2026-11-16 | invite-daily-limit: invitations capped at 70 per Workspace and 300 for the platform per rolling 24 hours (429 `INVITE_DAILY_LIMIT` and `INVITE_PLATFORM_LIMIT`), and no email address in mail or worker log lines. No frontend change: the 429 message already reaches the invite form and onboarding | backend: biome + tsc + `npm test` 235/235 + build; frontend docs only |
 | 2026-11-18 | reports (slice 2): weekly-to-quarterly Schedule with versions, lazily made Reporting periods, one autosaving draft per person per period, submit with late marking and a 7 day grace, edit with revisions and `edited` events, delete while unseen, server-side HTML sanitizing (`sanitize-html`), one `ReportAccess` choke point. Migration `0002_reports.sql`. Submit, My reports, Report page and Settings schedule now use the real API. My record and the review screens stay on sample data | backend: biome + tsc + check:circular + `npm test` 396/396 + build; frontend: biome + tsc + `npm test` 311/311 + build; fresh-context review APPROVED; live HTTP check on :5000 (all checks seen); browser pass not done |
+| 2026-11-18 | reports-list-fix: Home and My record read real reports | tsc + tests + API (frontend `56c122b`: 8 new tests, `npm test` 319/319, build; headless browser pass as a staff member of the same shape as the owner; fresh-context review APPROVED) |
 
 ## In progress
 
@@ -112,6 +113,14 @@ Nothing. Every UI task from UI-1 to UI-17 and the ai-drafting change is built; `
 - reports: `npm test` in the frontend took 327s to 479s and the full backend suite 1709s under machine load, over the 3 minute rule. Setup, not tests, is the cost. `rg` is not installed here, so dash checks use `Select-String`.
 - reports: `.gitattributes` is still missing for backend migrations. With `core.autocrlf=true` a checkout writes `0002_reports.sql` as CRLF, which changes its hash and runs it once more (harmless, it is idempotent). Same risk as slice 1.
 - reports: the backend has one pre-existing em dash in a code comment, `src/db/postgres.schema.ts:1`.
+- review (slice 3): no email for comments, tasks or submissions. Only approve and reject decisions send an email (`DECISION_EMAILS_ENABLED`). Notifications for the rest are in-app only.
+- review: the bell polls every 60 seconds and on window focus. The backend already pushes `notification:new` over Redis, but the frontend has no websocket client yet.
+- review: the review queue and the task list are capped at 500 rows with no pagination, and the cap truncates silently. The notification list asks for the 50 newest. The existing `total` in `GET /notifications` counts the fetched rows only.
+- review: comments cannot be edited or deleted, and task completion files are metadata only (no upload).
+- review: the task board no longer offers "Show older". The server keeps Done to the last 14 days and there is no way to ask for older ones.
+- review: `src/data/notifications.ts` and `SAMPLE_TASKS` in `src/data/tasks.ts` are no longer read by any screen. They stay for the mock-only tests. Search, Analytics (Workspace and Space scope), the Assistant and the Console still read sample reports.
+- review: `src/lib/review.ts` `queueFor` and `missingFor` are no longer called by a screen, because the server builds the queue and the missing list. They stay for their tests.
+- review: `npx tsc --noEmit` reports syntax errors inside `.next/dev/types` while the owner's `next dev` is running, because the dev server rewrites those generated files. The errors are not in `src/`.
 - reports: the live check left fixtures in the local `app` database: Workspace 8, Space 11, Membership 15, periods 2 and 3, reports 1 (soft deleted), 4 and 5.
 
 ## Not v1
