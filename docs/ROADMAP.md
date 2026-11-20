@@ -35,6 +35,7 @@ OpenSpec changes under `openspec/changes/`; there is no other spec location.
 | 2026-11-18 | reports (slice 2): weekly-to-quarterly Schedule with versions, lazily made Reporting periods, one autosaving draft per person per period, submit with late marking and a 7 day grace, edit with revisions and `edited` events, delete while unseen, server-side HTML sanitizing (`sanitize-html`), one `ReportAccess` choke point. Migration `0002_reports.sql`. Submit, My reports, Report page and Settings schedule now use the real API. My record and the review screens stay on sample data | backend: biome + tsc + check:circular + `npm test` 396/396 + build; frontend: biome + tsc + `npm test` 311/311 + build; fresh-context review APPROVED; live HTTP check on :5000 (all checks seen); browser pass not done |
 | 2026-11-18 | reports-list-fix: Home and My record read real reports | tsc + tests + API (frontend `56c122b`: 8 new tests, `npm test` 319/319, build; headless browser pass as a staff member of the same shape as the owner; fresh-context review APPROVED) |
 
+| 2026-11-20 | review (slice 3): review queue and decisions (approve, reject, reopen, bulk approve), seen starting the edit window, comment threads with follow-up tasks, task board, and in-app notifications on the real API. Decision emails for approve and reject only (`DECISION_EMAILS_ENABLED`). Migration `0003_review.sql`. "Reviewed by" names the Head or Workspace admins | backend: biome + tsc + check:circular + `npm test` 488/488 + build; frontend: biome + tsc + `npm test` 356/356 + build; fresh-context review APPROVED; live HTTP check on :5000 (27 of 27 seen); browser pass not done |
 ## In progress
 
 | Date | Feature | Status |
@@ -122,6 +123,16 @@ Nothing. Every UI task from UI-1 to UI-17 and the ai-drafting change is built; `
 - review: `src/lib/review.ts` `queueFor` and `missingFor` are no longer called by a screen, because the server builds the queue and the missing list. They stay for their tests.
 - review: `npx tsc --noEmit` reports syntax errors inside `.next/dev/types` while the owner's `next dev` is running, because the dev server rewrites those generated files. The errors are not in `src/`.
 - reports: the live check left fixtures in the local `app` database: Workspace 8, Space 11, Membership 15, periods 2 and 3, reports 1 (soft deleted), 4 and 5.
+- review: the overriding Admin is not notified of the author's reply, because `reviewersOf` returns only the designated reviewer. Add the deciding Admin or record it as intended.
+- review: a task can go to any active Staff or Head (D15), but its notification links to the report, which is a 404 for someone who is neither author nor reviewer. Restrict assignees or link to the task board.
+- review: `completionFile` name and type are length-checked only, not sanitized. React renders them as text; check them before any future email or export prints them.
+- review: Home reviewer cards still read `SAMPLE_REPORTS`, `SAMPLE_PERIOD` and `SAMPLE_NOW` (`src/components/home/home-screen.tsx`). Wire them to the queue API.
+- review: D21 lets an assignee move a task in a read-only Workspace. A default taken without an owner decision; confirm it.
+- review: not exercised live: a Head of Space deciding, bulk approve, the no-Head fallback to Admins, a staff member who is not the author deciding, a third party commenting, and the content of a decision email. Backend tests cover them.
+- review: `src/lib/leads.ts:31` and `src/lib/api.ts:22` each default `NEXT_PUBLIC_API_URL` to `http://localhost:5000/api/v1`. Make `leads.ts` use `api.ts`. Pre-existing.
+- review: em dashes found in files this slice did not touch: `reportlee-backend/src/db/postgres.schema.ts` line 1 and `reportlee-backend/.env.example` line 20 (both comments, not user-facing).
+- review: `.agents/tasks/review/next-dev-types-corrupt-backup` holds a corrupt `.next/dev/types` copy from the owner's `next dev`. Delete it when no longer needed.
+- review: the live check left fixtures in workspace 8: reports 4 (rejected) and 5 (pending), task 1 (done), and 5 notifications for dev-member.
 
 ## Not v1
 
