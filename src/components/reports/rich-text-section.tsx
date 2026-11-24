@@ -12,6 +12,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useEffect, useRef } from "react";
+import { editorSync } from "@/lib/editor-sync";
 import { cn } from "@/lib/utils";
 
 /* @info - Tiptap parses whatever HTML it is given into its own schema, which is also
@@ -31,6 +32,7 @@ export function RichTextSection({
   onChange,
   onBlur,
 }: RichTextSectionProps) {
+  const sync = useRef(editorSync(value));
   const editor = useEditor({
     extensions: [StarterKit],
     content: value,
@@ -43,17 +45,17 @@ export function RichTextSection({
       },
     },
     onUpdate: ({ editor: instance }) => {
-      onChange(instance.getHTML(), instance.getText().length);
+      const html = instance.getHTML();
+      sync.current.emitted(html);
+      onChange(html, instance.getText().length);
     },
     onBlur,
   });
 
   // Only a value that changed outside the editor (a loaded draft, another tab) replaces
   // the content; the person's own keystrokes must never be set back under them.
-  const synced = useRef(value);
   useEffect(() => {
-    if (!editor || value === synced.current) return;
-    synced.current = value;
+    if (!editor || !sync.current.shouldReplace(value)) return;
     editor.commands.setContent(value, { emitUpdate: false });
   }, [editor, value]);
 

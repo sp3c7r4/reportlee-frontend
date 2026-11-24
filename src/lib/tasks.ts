@@ -1,9 +1,9 @@
 import type { RosterMember } from "../data/members";
 import {
   type Priority,
+  SAMPLE_TASKS,
   type Task,
   type TaskStatus,
-  SAMPLE_TASKS,
 } from "../data/tasks.ts";
 import type { Role } from "./nav";
 
@@ -75,6 +75,68 @@ export function viewsFor(viewer: TaskViewer): View[] {
 export function effectiveView(viewer: TaskViewer, requested: View): View {
   const allowed = viewsFor(viewer);
   return allowed.includes(requested) ? requested : (allowed[0] ?? "mine");
+}
+
+/** Whether a press on a card lifts it for a drag. */
+export function startsDrag(input: {
+  canMove: boolean;
+  pointerType: string;
+  /** The press began on a button, link or field inside the card. */
+  onControl: boolean;
+}): boolean {
+  if (!input.canMove) return false;
+  /* @info - A drag takes the pointer and turns the card's hit testing off, so a press
+     on "Move to" or "Show report" never became a click. Controls keep their press. */
+  if (input.onControl) return false;
+  return input.pointerType !== "touch";
+}
+
+/** The selector a card's press is checked against for `onControl`. */
+export const CARD_CONTROLS = "button, a, input, select, textarea, label";
+
+const VIEW_EMPTY: Record<View, string> = {
+  mine: "Nothing is assigned to you.",
+  by: "You have not assigned any tasks.",
+  space: "Nobody in your Space has a task.",
+  all: "There are no tasks in this Workspace.",
+};
+
+export type EmptyBoard = {
+  message: string;
+  /** How to get a task onto this board, with where to start. */
+  hint: { text: string; href: string; label: string } | null;
+  /** Where this person's own tasks live when this Workspace cannot hold any. */
+  elsewhere: string | null;
+};
+
+/** What an empty board says. */
+export function emptyBoard(input: {
+  view: View;
+  overdueOnly: boolean;
+  role: Role;
+  /** Names of other Workspaces where this person is Staff or Head. */
+  assignableIn: string[];
+}): EmptyBoard {
+  if (input.overdueOnly) {
+    return { message: "Nothing is overdue.", hint: null, elsewhere: null };
+  }
+  /* @info - A task is only made from a comment on a report (design D14), so an assigner
+     looking at an empty board is told where that starts. */
+  const assigner = input.view === "by" || input.view === "all";
+  const hint = assigner
+    ? {
+        text: "To assign a task, open a report and add a follow-up from a comment.",
+        href: "/dashboard/review",
+        label: "Open Review",
+      }
+    : null;
+  /* @info - An Admin is never an assignee, so someone who is Staff elsewhere and lands
+     here as Admin would otherwise read the board as having lost their tasks. */
+  const elsewhere =
+    input.role === "admin" && input.assignableIn.length > 0
+      ? `You are an Admin in this Workspace, so no task is assigned to you here. Tasks assigned to you are in ${input.assignableIn.join(", ")}. Switch Workspace to see them.`
+      : null;
+  return { message: VIEW_EMPTY[input.view], hint, elsewhere };
 }
 
 function spaceOf(roster: RosterMember[], membershipId: string): string | null {

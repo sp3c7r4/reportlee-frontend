@@ -22,13 +22,16 @@ import { listMembers } from "@/lib/members";
 import { reportErrorMessage } from "@/lib/report-errors";
 import {
   assigneeProblem,
+  CARD_CONTROLS,
   effectiveView,
+  emptyBoard,
   moveTask,
   overdue,
   PRIORITY_LABEL,
   PRIORITY_TONE,
   priorityOf,
   sortByPriority,
+  startsDrag,
   type TaskViewer,
   VIEW_LABEL,
   type View,
@@ -46,15 +49,8 @@ const COLUMNS: Array<[TaskStatus, string]> = [
   ["done", "Done"],
 ];
 
-const VIEW_EMPTY: Record<View, string> = {
-  mine: "Nothing is assigned to you.",
-  by: "You have not assigned any tasks.",
-  space: "Nobody in your Space has a task.",
-  all: "There are no tasks in this Workspace.",
-};
-
 export function TaskBoard() {
-  const { membership, workspace } = useShell();
+  const { membership, workspace, memberships, workspaceFor } = useShell();
   // Stable identity: a fresh object every render would re-run the effect below forever.
   const viewer: TaskViewer = useMemo(
     () => ({
@@ -141,8 +137,18 @@ export function TaskBoard() {
    * finger scrolls the page and the Move to menu is the phone's way to move a card.
    */
   const startDrag = (event: React.PointerEvent<HTMLElement>, task: Task) => {
-    if (!canMove(task)) return;
-    if (event.pointerType === "touch") return;
+    const onControl =
+      event.target instanceof Element &&
+      event.target.closest(CARD_CONTROLS) !== null;
+    if (
+      !startsDrag({
+        canMove: canMove(task),
+        pointerType: event.pointerType,
+        onControl,
+      })
+    ) {
+      return;
+    }
     event.preventDefault();
 
     const card = event.currentTarget;
@@ -288,6 +294,17 @@ export function TaskBoard() {
     effectiveView(viewer, view) === "mine" &&
     task.assigneeMembershipId === viewer.membershipId;
 
+  const empty = emptyBoard({
+    view: effectiveView(viewer, view),
+    overdueOnly,
+    role: viewer.role,
+    assignableIn: memberships
+      .filter(
+        (entry) => entry.workspaceId !== workspace.id && entry.role !== "admin",
+      )
+      .map((entry) => workspaceFor(entry).name),
+  });
+
   const columns = COLUMNS.map(([status, label]) => ({
     status,
     label,
@@ -367,9 +384,21 @@ export function TaskBoard() {
       ) : null}
 
       {loaded && !failure && rows.length === 0 ? (
-        <p className="mt-4 rounded-lg border border-hairline border-dashed px-4 py-8 text-center text-[13px] text-ink/60">
-          {overdueOnly ? "Nothing is overdue." : VIEW_EMPTY[view]}
-        </p>
+        <div className="mt-4 rounded-lg border border-hairline border-dashed px-4 py-8 text-center text-[13px] text-ink/60">
+          <p>{empty.message}</p>
+          {empty.hint ? (
+            <p className="mt-2">
+              {empty.hint.text}{" "}
+              <Link
+                href={empty.hint.href}
+                className="font-medium text-ink underline underline-offset-2"
+              >
+                {empty.hint.label}
+              </Link>
+            </p>
+          ) : null}
+          {empty.elsewhere ? <p className="mt-2">{empty.elsewhere}</p> : null}
+        </div>
       ) : null}
 
       {loaded && !failure && rows.length > 0 ? (
