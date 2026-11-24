@@ -73,6 +73,7 @@ Nothing. Every UI task from UI-1 to UI-17 and the ai-drafting change is built; `
 
 - AGENTS.md is out of date about the backend: it says reportlee-backend does not exist and there is no local stack; both now exist (backend on :5000, Postgres on host port 5434)
 - No admin UI for granting roles yet; use the PATCH endpoint /api/v1/user/:id/role
+- Browser-level check missing for two fixes in `review-browser-fixes`: a click on a task card's "Move to ..." button or "Show report" link (`closest(CARD_CONTROLS)` in `task-board.tsx`) and typed spaces in a report section (`editorSync` ref in `rich-text-section.tsx`). Only the pure functions in `src/lib` have unit tests. There is no e2e script yet.
 
 - Biome backlog: 128 errors and 5 warnings on 2026-10-23. Do not chase zero inside a feature task.
 - Three sidebar links 404 until their phase: `/dashboard/tasks`, `/dashboard/review`, `/dashboard/spaces`.
